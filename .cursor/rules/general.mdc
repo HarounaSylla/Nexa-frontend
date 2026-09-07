@@ -1,0 +1,19 @@
+---
+description: General project rules — apply to every change in this repo
+alwaysApply: true
+---
+
+# General rules
+
+- Write all code, comments, and commit messages in English.
+- Mobile-first, responsive layout: phone, tablet, and desktop from a
+  single codebase, no separate native app. Test any UI or navigation
+  change on a real phone browser, not only desktop — don't wait until the
+  end of the project to find out something breaks on a smaller screen.
+- Keep changes narrowly scoped to what was asked. Never refactor or
+  "clean up" adjacent components that weren't part of the request.
+- Before considering a task done, re-run the full test suite, not just
+  the tests near the file you touched.
+- Never state a task is complete without concrete proof (a screenshot on
+  the actual breakpoints affected, console output, or a passing test run
+  pasted in full) — a status summary alone is not proof.
