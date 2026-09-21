@@ -1,0 +1,268 @@
+"use client";
+
+import { useAuth } from "@clerk/nextjs";
+import { useMemo, useRef, useState } from "react";
+
+import { errorMessage } from "@/lib/api";
+import {
+  type Deliverer,
+  getOrder,
+  listDeliverers,
+  listOrders,
+  type OrderDetail,
+  type OrderListItem,
+} from "@/lib/orders-api";
+import {
+  bannerErrorClass,
+  btnSecondary,
+  cardClass,
+  cardInteractiveClass,
+  emptyStateClass,
+  inputClass,
+  pageTitleClass,
+} from "@/lib/ui";
+
+import { PaymentStatusBadge, StatusBadge } from "./badges";
+import { OrderDetailPanel } from "./order-detail-panel";
+import {
+  formatDate,
+  formatEnum,
+  formatMoney,
+  uniqueStatuses,
+} from "./order-helpers";
+
+export function OrdersView({
+  initialOrders,
+  initialError = null,
+}: {
+  initialOrders: OrderListItem[];
+  initialError?: string | null;
+}) {
+  const { getToken } = useAuth();
+  const [orders, setOrders] = useState(initialOrders);
+  const [listError, setListError] = useState<string | null>(initialError);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<OrderDetail | null>(null);
+  const [deliverers, setDeliverers] = useState<Deliverer[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const openRequest = useRef(0);
+
+  const statuses = useMemo(() => uniqueStatuses(orders), [orders]);
+  const activeFilter =
+    statusFilter === "all" || statuses.includes(statusFilter)
+      ? statusFilter
+      : "all";
+  const visibleOrders = useMemo(() => {
+    if (activeFilter === "all") {
+      return orders;
+    }
+    return orders.filter((order) => order.status === activeFilter);
+  }, [activeFilter, orders]);
+
+  async function openOrder(orderId: string) {
+    const requestId = ++openRequest.current;
+    setSelectedId(orderId);
+    setDetail(null);
+    setDetailLoading(true);
+    setDetailError(null);
+    setActionError(null);
+    setNotice(null);
+    try {
+      const token = await getToken();
+      const [nextDetail, nextDeliverers] = await Promise.all([
+        getOrder(token, orderId),
+        listDeliverers(token),
+      ]);
+      if (requestId !== openRequest.current) {
+        return;
+      }
+      setDetail(nextDetail);
+      setDeliverers(nextDeliverers);
+    } catch (err) {
+      if (requestId !== openRequest.current) {
+        return;
+      }
+      setDetailError(errorMessage(err));
+    } finally {
+      if (requestId === openRequest.current) {
+        setDetailLoading(false);
+      }
+    }
+  }
+
+  function closeOrder() {
+    openRequest.current += 1;
+    setSelectedId(null);
+    setDetail(null);
+    setDetailLoading(false);
+    setDetailError(null);
+    setNotice(null);
+    setActionError(null);
+  }
+
+  async function refreshList(token: string | null) {
+    const next = await listOrders(token);
+    setOrders(next);
+    setListError(null);
+  }
+
+  async function runAction(
+    action: (token: string | null) => Promise<void>,
+    successNotice?: string,
+  ) {
+    if (!selectedId) {
+      return false;
+    }
+    setActionPending(true);
+    setActionError(null);
+    setNotice(null);
+    try {
+      const token = await getToken();
+      await action(token);
+      const [nextDetail, nextDeliverers] = await Promise.all([
+        getOrder(token, selectedId),
+        listDeliverers(token),
+        refreshList(token),
+      ]);
+      setDetail(nextDetail);
+      setDeliverers(nextDeliverers);
+      if (successNotice) {
+        setNotice(successNotice);
+      }
+      return true;
+    } catch (err) {
+      setActionError(errorMessage(err));
+      return false;
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  if (listError) {
+    return (
+      <div className="mx-auto w-full max-w-5xl">
+        <h1 className={pageTitleClass}>Commandes</h1>
+        <p className={`mt-6 ${bannerErrorClass}`} role="alert">
+          {listError}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-5xl">
+      <h1 className={pageTitleClass}>Commandes</h1>
+      <p className="mt-2 text-sm text-zinc-500 tabular-nums">
+        {orders.length} commande{orders.length === 1 ? "" : "s"}
+      </p>
+
+      <label className="mt-4 flex max-w-xs flex-col gap-1 text-sm font-medium">
+        Statut
+        <select
+          value={activeFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          className={inputClass}
+        >
+          <option value="all">Toutes</option>
+          {statuses.map((status) => (
+            <option key={status} value={status}>
+              {formatEnum(status)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {orders.length === 0 ? (
+        <div className={`mt-8 ${emptyStateClass}`}>
+          <p className="font-medium text-zinc-800">Aucune commande pour le moment</p>
+          <p className="mt-1 text-sm">
+            Les commandes WhatsApp apparaîtront ici.
+          </p>
+        </div>
+      ) : visibleOrders.length === 0 ? (
+        <p className="mt-8 text-sm text-zinc-500">
+          Aucune commande avec ce statut.
+        </p>
+      ) : (
+        <ul className="mt-4 flex flex-col gap-2">
+          {visibleOrders.map((order) => (
+            <li key={order.id}>
+              <button
+                type="button"
+                onClick={() => openOrder(order.id)}
+                className={`${cardInteractiveClass} flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:justify-between`}
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{order.customer_phone}</p>
+                  <p className="text-sm text-zinc-500 tabular-nums">
+                    {order.city ?? "Pas de ville"} · {order.item_count} article
+                    {order.item_count === 1 ? "" : "s"} · {formatMoney(order.total)}
+                  </p>
+                  <p className="text-sm text-zinc-500">
+                    {formatEnum(order.payment_method)} · {formatDate(order.created_at)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge status={order.status} />
+                  <PaymentStatusBadge status={order.payment_status} />
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {selectedId && detailLoading && !detail ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Chargement de la commande"
+            className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-lg sm:rounded-card`}
+          >
+            <p className="text-sm text-zinc-500">Chargement de la commande…</p>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedId && detailError && !detail ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Erreur de commande"
+            className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-lg sm:rounded-card`}
+          >
+            <p className="text-sm text-danger" role="alert">
+              {detailError}
+            </p>
+            <button
+              type="button"
+              onClick={closeOrder}
+              className={`${btnSecondary} mt-4`}
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {detail ? (
+        <OrderDetailPanel
+          order={detail}
+          deliverers={deliverers}
+          pending={actionPending}
+          notice={notice}
+          error={actionError}
+          onClose={closeOrder}
+          runAction={runAction}
+        />
+      ) : null}
+    </div>
+  );
+}
