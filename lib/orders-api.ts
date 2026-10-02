@@ -2,6 +2,7 @@ import { backendFetch } from "@/lib/api";
 
 export type OrderListItem = {
   id: string;
+  order_number: number;
   customer_phone: string;
   city: string | null;
   status: string;
@@ -37,8 +38,48 @@ export type Deliverer = {
   phone: string;
 };
 
+export type DeliveryZone = {
+  id: string;
+  merchant_id: string;
+  city: string;
+  available: boolean;
+  min_delivery_hours: number;
+  max_delivery_hours: number;
+};
+
+export type CreateOrderInput = {
+  customer_phone: string;
+  items: { product_id: string; quantity: number }[];
+  payment_method: "cash_on_delivery" | "online";
+  delivery_address: string;
+  ville: string;
+};
+
+export type CreatedOrder = {
+  id: string;
+  order_number: number;
+};
+
 export async function listOrders(token: string | null) {
   return backendFetch<OrderListItem[]>("/orders", { token });
+}
+
+export async function createOrder(token: string | null, input: CreateOrderInput) {
+  return backendFetch<CreatedOrder>("/orders", {
+    token,
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listDeliveryZones(
+  token: string | null,
+  merchantId: string,
+) {
+  return backendFetch<DeliveryZone[]>(
+    `/orders/delivery-zones?merchant_id=${encodeURIComponent(merchantId)}`,
+    { token },
+  );
 }
 
 export async function getOrder(token: string | null, orderId: string) {

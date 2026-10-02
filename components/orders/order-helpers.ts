@@ -39,6 +39,24 @@ export function formatEnum(value: string): string {
   return DISPLAY_LABELS[value] ?? value.replaceAll("_", " ");
 }
 
+export function formatOrderNumber(orderNumber: number): string {
+  return `Commande #${orderNumber}`;
+}
+
+export function displayOrderError(message: string): string {
+  const delivery = message.match(/^Delivery is not available in (.+)$/);
+  if (delivery) {
+    return `La livraison n'est pas disponible à ${delivery[1]}.`;
+  }
+  const stock = message.match(
+    /^Insufficient stock for product .+: requested (\d+), available (\d+)$/,
+  );
+  if (stock) {
+    return `Stock insuffisant : ${stock[1]} demandés, ${stock[2]} disponibles.`;
+  }
+  return message;
+}
+
 export function isTerminalStatus(status: string): boolean {
   return TERMINAL_STATUSES.has(status);
 }

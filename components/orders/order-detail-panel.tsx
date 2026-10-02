@@ -32,6 +32,7 @@ import {
   formatDate,
   formatEnum,
   formatMoney,
+  formatOrderNumber,
 } from "./order-helpers";
 
 const NEW_DELIVERER = "__new__";
@@ -149,11 +150,11 @@ export function OrderDetailPanel({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id={titleId} className="font-display text-lg font-bold">
-              Commande {order.customer_phone}
+            <h2 id={titleId} className="font-display text-lg font-bold tabular-nums">
+              {formatOrderNumber(order.order_number)}
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
-              {formatDate(order.created_at)}
+              {order.customer_phone} · {formatDate(order.created_at)}
             </p>
           </div>
           <button

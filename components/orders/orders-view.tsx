@@ -14,6 +14,7 @@ import {
 } from "@/lib/orders-api";
 import {
   bannerErrorClass,
+  btnPrimary,
   btnSecondary,
   cardClass,
   cardInteractiveClass,
@@ -23,11 +24,13 @@ import {
 } from "@/lib/ui";
 
 import { PaymentStatusBadge, StatusBadge } from "./badges";
+import { CreateOrderDialog } from "./create-order-dialog";
 import { OrderDetailPanel } from "./order-detail-panel";
 import {
   formatDate,
   formatEnum,
   formatMoney,
+  formatOrderNumber,
   uniqueStatuses,
 } from "./order-helpers";
 
@@ -50,6 +53,7 @@ export function OrdersView({
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const openRequest = useRef(0);
 
   const statuses = useMemo(() => uniqueStatuses(orders), [orders]);
@@ -161,21 +165,30 @@ export function OrdersView({
         {orders.length} commande{orders.length === 1 ? "" : "s"}
       </p>
 
-      <label className="mt-4 flex max-w-xs flex-col gap-1 text-sm font-medium">
-        Statut
-        <select
-          value={activeFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
-          className={inputClass}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <label className="flex max-w-xs flex-col gap-1 text-sm font-medium">
+          Statut
+          <select
+            value={activeFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className={inputClass}
+          >
+            <option value="all">Toutes</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {formatEnum(status)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          className={btnPrimary}
         >
-          <option value="all">Toutes</option>
-          {statuses.map((status) => (
-            <option key={status} value={status}>
-              {formatEnum(status)}
-            </option>
-          ))}
-        </select>
-      </label>
+          Nouvelle commande
+        </button>
+      </div>
 
       {orders.length === 0 ? (
         <div className={`mt-8 ${emptyStateClass}`}>
@@ -198,9 +211,12 @@ export function OrdersView({
                 className={`${cardInteractiveClass} flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:justify-between`}
               >
                 <div className="min-w-0">
-                  <p className="font-medium">{order.customer_phone}</p>
+                  <p className="font-medium tabular-nums">
+                    {formatOrderNumber(order.order_number)}
+                  </p>
                   <p className="text-sm text-zinc-500 tabular-nums">
-                    {order.city ?? "Pas de ville"} · {order.item_count} article
+                    {order.customer_phone} · {order.city ?? "Pas de ville"} ·{" "}
+                    {order.item_count} article
                     {order.item_count === 1 ? "" : "s"} · {formatMoney(order.total)}
                   </p>
                   <p className="text-sm text-zinc-500">
@@ -216,6 +232,20 @@ export function OrdersView({
           ))}
         </ul>
       )}
+
+      {creating ? (
+        <CreateOrderDialog
+          getToken={getToken}
+          pending={actionPending}
+          onClose={() => setCreating(false)}
+          onCreated={async (orderId, orderNumber) => {
+            setCreating(false);
+            await refreshList(await getToken());
+            await openOrder(orderId);
+            setNotice(`${formatOrderNumber(orderNumber)} créée.`);
+          }}
+        />
+      ) : null}
 
       {selectedId && detailLoading && !detail ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">

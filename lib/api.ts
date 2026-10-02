@@ -67,9 +67,11 @@ export async function backendFetch<T>(
   return body as T;
 }
 
-export const getMerchantMe = cache(async (token: string | null) => {
+export async function fetchMerchantMe(token: string | null) {
   return backendFetch<Merchant>("/merchants/me", { token });
-});
+}
+
+export const getMerchantMe = cache(fetchMerchantMe);
 
 export async function onboardMerchant(token: string | null, name: string) {
   return backendFetch<Merchant>("/merchants/onboarding", {
