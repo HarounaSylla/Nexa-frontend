@@ -27,6 +27,7 @@ import { PaymentStatusBadge, StatusBadge } from "./badges";
 import { CreateOrderDialog } from "./create-order-dialog";
 import { OrderDetailPanel } from "./order-detail-panel";
 import {
+  displayOrderError,
   formatDate,
   formatEnum,
   formatMoney,
@@ -140,7 +141,7 @@ export function OrdersView({
       }
       return true;
     } catch (err) {
-      setActionError(errorMessage(err));
+      setActionError(displayOrderError(errorMessage(err)));
       return false;
     } finally {
       setActionPending(false);
@@ -225,7 +226,9 @@ export function OrdersView({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge status={order.status} />
-                  <PaymentStatusBadge status={order.payment_status} />
+                  {order.status !== "cancelled" ? (
+                    <PaymentStatusBadge status={order.payment_status} />
+                  ) : null}
                 </div>
               </button>
             </li>

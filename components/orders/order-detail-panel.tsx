@@ -8,6 +8,7 @@ import {
   confirmDelivery,
   createDeliverer,
   type Deliverer,
+  markOrderPaid,
   type OrderDetail,
   setPaymentLink,
 } from "@/lib/orders-api";
@@ -28,6 +29,7 @@ import {
   canAssignDeliverer,
   canCancelOrder,
   canConfirmDelivery,
+  canMarkPaid,
   canSendPaymentLink,
   formatDate,
   formatEnum,
@@ -67,11 +69,15 @@ export function OrderDetailPanel({
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmPaid, setConfirmPaid] = useState(false);
+  const paidTitleId = useId();
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !pending) {
-        if (confirmCancel) {
+        if (confirmPaid) {
+          setConfirmPaid(false);
+        } else if (confirmCancel) {
           setConfirmCancel(false);
         } else {
           onClose();
@@ -80,12 +86,17 @@ export function OrderDetailPanel({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [confirmCancel, onClose, pending]);
+  }, [confirmCancel, confirmPaid, onClose, pending]);
 
   const showPaymentLink = canSendPaymentLink(order);
   const showAssign = canAssignDeliverer(order);
   const showConfirm = canConfirmDelivery(order);
+  const showMarkPaid = canMarkPaid(order);
   const showCancel = canCancelOrder(order);
+  const showCodPendingHelp =
+    order.payment_method === "cash_on_delivery" &&
+    order.payment_status === "pending" &&
+    order.status !== "cancelled";
   const addingDeliverer = delivererChoice === NEW_DELIVERER;
 
   async function submitPaymentLink(event: FormEvent) {
@@ -140,6 +151,15 @@ export function OrderDetailPanel({
     }
   }
 
+  async function submitMarkPaid() {
+    const ok = await runAction(async (token) => {
+      await markOrderPaid(token, order.id);
+    }, "Paiement enregistré.");
+    if (ok) {
+      setConfirmPaid(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
       <div
@@ -168,7 +188,9 @@ export function OrderDetailPanel({
 
         <div className="mt-4 flex flex-wrap gap-2">
           <StatusBadge status={order.status} />
-          <PaymentStatusBadge status={order.payment_status} />
+          {order.status !== "cancelled" ? (
+            <PaymentStatusBadge status={order.payment_status} />
+          ) : null}
         </div>
 
         <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
@@ -179,6 +201,12 @@ export function OrderDetailPanel({
           <div>
             <dt className="text-zinc-500">Mode de paiement</dt>
             <dd className="font-medium">{formatEnum(order.payment_method)}</dd>
+            {showCodPendingHelp ? (
+              <p className="mt-1 text-sm text-zinc-500">
+                Le paiement sera marqué comme reçu à la confirmation de la
+                livraison.
+              </p>
+            ) : null}
           </div>
           <div className="sm:col-span-2">
             <dt className="text-zinc-500">Lien de paiement</dt>
@@ -331,6 +359,17 @@ export function OrderDetailPanel({
           </button>
         ) : null}
 
+        {showMarkPaid ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => setConfirmPaid(true)}
+            className={`${btnPrimary} mt-5 w-full`}
+          >
+            Marquer comme payée
+          </button>
+        ) : null}
+
         {showCancel ? (
           <button
             type="button"
@@ -340,6 +379,44 @@ export function OrderDetailPanel({
           >
             Annuler la commande
           </button>
+        ) : null}
+
+        {confirmPaid ? (
+          <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={paidTitleId}
+              className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-md sm:rounded-card`}
+            >
+              <h3 id={paidTitleId} className="font-display text-lg font-bold">
+                Confirmer le paiement ?
+              </h3>
+              <p className="mt-2 text-sm text-zinc-500">
+                Vous confirmez avoir reçu le paiement de{" "}
+                {formatMoney(order.total)} pour la commande #
+                {order.order_number}. Cette action ne peut pas être annulée.
+              </p>
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setConfirmPaid(false)}
+                  className={btnSecondary}
+                >
+                  Pas encore
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={submitMarkPaid}
+                  className={btnPrimary}
+                >
+                  {pending ? "Enregistrement…" : "Oui, paiement reçu"}
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {confirmCancel ? (

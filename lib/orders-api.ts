@@ -151,6 +151,13 @@ export async function confirmDelivery(token: string | null, orderId: string) {
   });
 }
 
+export async function markOrderPaid(token: string | null, orderId: string) {
+  return backendFetch<OrderDetail>(`/orders/${orderId}/mark-paid`, {
+    token,
+    method: "POST",
+  });
+}
+
 export async function cancelOrder(token: string | null, orderId: string) {
   return backendFetch<unknown>(`/orders/${orderId}/cancel`, {
     token,

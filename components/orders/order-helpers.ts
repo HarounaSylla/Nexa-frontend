@@ -31,8 +31,8 @@ const DISPLAY_LABELS: Record<string, string> = {
   cancelled: "Annulée",
   cash_on_delivery: "Paiement à la livraison",
   online: "Paiement en ligne",
-  pending: "En attente",
-  paid: "Payée",
+  pending: "Paiement en attente",
+  paid: "Paiement reçu",
 };
 
 export function formatEnum(value: string): string {
@@ -53,6 +53,15 @@ export function displayOrderError(message: string): string {
   );
   if (stock) {
     return `Stock insuffisant : ${stock[1]} demandés, ${stock[2]} disponibles.`;
+  }
+  if (/^Only online-payment orders can be marked as paid/.test(message)) {
+    return (
+      "Seules les commandes payées en ligne peuvent être marquées comme payées. " +
+      "Le paiement à la livraison est enregistré à la confirmation de la livraison."
+    );
+  }
+  if (/^Cannot mark as paid order .+ in status cancelled$/.test(message)) {
+    return "Cette commande est annulée : le paiement ne peut pas être enregistré.";
   }
   return message;
 }
@@ -79,6 +88,14 @@ export function canConfirmDelivery(order: OrderDetail): boolean {
 
 export function canCancelOrder(order: OrderDetail): boolean {
   return !isTerminalStatus(order.status);
+}
+
+export function canMarkPaid(order: OrderDetail): boolean {
+  return (
+    order.payment_method === "online" &&
+    order.payment_status === "pending" &&
+    order.status !== "cancelled"
+  );
 }
 
 const STATUS_ORDER = [
