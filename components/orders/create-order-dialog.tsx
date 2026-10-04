@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState, type FormEvent } from "react";
 
-import { errorMessage, fetchMerchantMe } from "@/lib/api";
+import { errorMessage } from "@/lib/api";
 import { listProducts, type CatalogueProduct } from "@/lib/catalogue-api";
 import {
   createOrder,
@@ -75,10 +75,9 @@ export function CreateOrderDialog({
       setLoadError(null);
       try {
         const token = await getToken();
-        const merchant = await fetchMerchantMe(token);
         const [nextProducts, nextZones] = await Promise.all([
           listProducts(token),
-          listDeliveryZones(token, merchant.id),
+          listDeliveryZones(token),
         ]);
         if (cancelled) {
           return;

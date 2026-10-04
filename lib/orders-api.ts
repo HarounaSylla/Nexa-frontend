@@ -72,14 +72,33 @@ export async function createOrder(token: string | null, input: CreateOrderInput)
   });
 }
 
-export async function listDeliveryZones(
+export type DeliveryZoneInput = {
+  city: string;
+  available: boolean;
+  min_delivery_hours: number;
+  max_delivery_hours: number;
+};
+
+export async function listDeliveryZones(token: string | null) {
+  return backendFetch<DeliveryZone[]>("/orders/delivery-zones", { token });
+}
+
+export async function saveDeliveryZone(
   token: string | null,
-  merchantId: string,
+  body: DeliveryZoneInput,
 ) {
-  return backendFetch<DeliveryZone[]>(
-    `/orders/delivery-zones?merchant_id=${encodeURIComponent(merchantId)}`,
-    { token },
-  );
+  return backendFetch<DeliveryZone>("/orders/delivery-zones", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteDeliveryZone(token: string | null, id: string) {
+  return backendFetch<null>(`/orders/delivery-zones/${id}`, {
+    token,
+    method: "DELETE",
+  });
 }
 
 export async function getOrder(token: string | null, orderId: string) {
