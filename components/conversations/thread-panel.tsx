@@ -11,6 +11,7 @@ import { btnPrimary, btnSecondary, cardClass, inputClass } from "@/lib/ui";
 import {
   escalationReason,
   formatDate,
+  isClosed,
   isEscalated,
   isEscalationNote,
   roleLabel,
@@ -80,6 +81,12 @@ export function ThreadPanel({
             </h2>
             <div className="mt-2">
               <ConversationStatusBadge status={conversation.status} />
+              {isClosed(conversation.status) ? (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Conversation fermée — si le client écrit à nouveau, un nouveau fil sera
+                  créé automatiquement.
+                </p>
+              ) : null}
             </div>
           </div>
           <button type="button" onClick={onClose} className={btnSecondary}>

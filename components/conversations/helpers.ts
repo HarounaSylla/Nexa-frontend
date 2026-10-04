@@ -6,6 +6,34 @@ export function isEscalated(status: string): boolean {
   return status === "escalated";
 }
 
+export function isClosed(status: string): boolean {
+  return status === "closed";
+}
+
+export function conversationStatusLabel(status: string): string {
+  if (status === "all") {
+    return "Toutes";
+  }
+  if (status === "active") {
+    return "En cours";
+  }
+  if (status === "escalated") {
+    return "Escaladée";
+  }
+  if (status === "closed") {
+    return "Fermée";
+  }
+  return status;
+}
+
+export function normalizePhone(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^\+/, "")
+    .replace(/[\s.\-()]/g, "");
+}
+
 export function isEscalationNote(message: ConversationMessage): boolean {
   return (
     message.turn_role === "agent" &&

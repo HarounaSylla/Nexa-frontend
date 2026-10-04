@@ -1,4 +1,4 @@
-type Tone = "neutral" | "info" | "success" | "danger" | "warning";
+type Tone = "neutral" | "info" | "success" | "danger" | "warning" | "muted";
 
 const TONE_CLASS: Record<Tone, string> = {
   neutral: "bg-accent-soft text-accent-text",
@@ -6,6 +6,7 @@ const TONE_CLASS: Record<Tone, string> = {
   success: "bg-success-soft text-success",
   danger: "bg-danger-soft text-danger",
   warning: "bg-warning-soft text-warning",
+  muted: "bg-zinc-100 text-zinc-500",
 };
 
 const DOT_CLASS: Record<Tone, string> = {
@@ -14,6 +15,7 @@ const DOT_CLASS: Record<Tone, string> = {
   success: "bg-success",
   danger: "bg-danger",
   warning: "bg-warning",
+  muted: "bg-zinc-400",
 };
 
 export function StatusPill({
@@ -25,7 +27,7 @@ export function StatusPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`}
     >
       <span
         aria-hidden="true"
