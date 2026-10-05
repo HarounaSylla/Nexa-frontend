@@ -1,6 +1,12 @@
 "use client";
 
-import { useId, useMemo, useState, type FormEvent } from "react";
+import {
+  useId,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { errorMessage } from "@/lib/api";
 import {
@@ -30,10 +36,12 @@ export function ShopPreferencesForm({
   getToken,
   preferences,
   onPreferencesChange,
+  afterPayment,
 }: {
   getToken: () => Promise<string | null>;
   preferences: MerchantPreferences;
   onPreferencesChange: (preferences: MerchantPreferences) => void;
+  afterPayment?: (acceptsOnlinePayment: boolean) => ReactNode;
 }) {
   const cashId = useId();
   const onlineId = useId();
@@ -96,7 +104,7 @@ export function ShopPreferencesForm({
   }
 
   return (
-    <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+    <div className="flex flex-col gap-4">
       <section className={`${cardClass} p-5`}>
         <h2 className={sectionTitleClass}>Paiement</h2>
         <p className="mt-1 text-sm text-zinc-500">
@@ -136,7 +144,8 @@ export function ShopPreferencesForm({
               Paiement en ligne
             </label>
             <p className="mt-1 pl-8 text-xs text-zinc-500">
-              Vous enverrez le lien de paiement depuis la page Commandes.
+              Ajoutez vos liens (Wave, Orange Money…) dans la carte « Liens de
+              paiement » plus bas. Vous les envoyez depuis la page Commandes.
             </p>
           </div>
         </div>
@@ -147,7 +156,10 @@ export function ShopPreferencesForm({
         ) : null}
       </section>
 
-      <section className={`${cardClass} p-5`}>
+      {afterPayment?.(form.accepts_online_payment)}
+
+      <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+        <section className={`${cardClass} p-5`}>
         <h2 className={sectionTitleClass}>Infos de la boutique</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Ce que l&apos;agent peut répondre aux clients. S&apos;il ne trouve pas
@@ -249,7 +261,8 @@ export function ShopPreferencesForm({
       >
         {saving ? "Enregistrement…" : "Enregistrer"}
       </button>
-    </form>
+      </form>
+    </div>
   );
 }
 

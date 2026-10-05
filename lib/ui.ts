@@ -10,6 +10,9 @@ export const btnDanger =
 export const btnDangerGhost =
   "inline-flex h-10 items-center justify-center rounded-control px-3 text-sm font-medium text-danger disabled:opacity-60";
 
+export const btnWarningOutline =
+  "inline-flex h-11 items-center justify-center rounded-control border border-warning bg-white px-4 text-sm font-medium text-warning disabled:opacity-60";
+
 export const cardClass =
   "rounded-card border border-zinc-200/80 bg-white shadow-card";
 
@@ -28,6 +31,9 @@ export const bannerErrorClass =
 
 export const bannerSuccessClass =
   "rounded-control border border-success/20 bg-success-soft px-3 py-2 text-sm text-success";
+
+export const bannerInfoClass =
+  "rounded-control border border-info/20 bg-info-soft px-3 py-2 text-sm text-info";
 
 export const emptyStateClass =
   `${cardClass} px-4 py-10 text-center text-zinc-500`;

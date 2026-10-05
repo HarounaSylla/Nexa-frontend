@@ -24,6 +24,9 @@ function paymentTone(status: string): Tone {
   if (status === "paid") {
     return "success";
   }
+  if (status === "proof_received") {
+    return "info";
+  }
   if (status === "pending") {
     return "warning";
   }

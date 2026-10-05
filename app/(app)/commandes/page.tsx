@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { auth } from "@clerk/nextjs/server";
 
 import { OrdersView } from "@/components/orders/orders-view";
@@ -16,5 +18,9 @@ export default async function CommandesPage() {
     initialError = errorMessage(error);
   }
 
-  return <OrdersView initialOrders={orders} initialError={initialError} />;
+  return (
+    <Suspense>
+      <OrdersView initialOrders={orders} initialError={initialError} />
+    </Suspense>
+  );
 }

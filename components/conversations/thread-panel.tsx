@@ -1,11 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import type {
   ConversationListItem,
   ConversationMessage,
+  MessageImage,
 } from "@/lib/conversations-api";
+import {
+  AuthenticatedImage,
+  ImagePreviewDialog,
+} from "@/components/shared/authenticated-image";
+import { PaymentStatusBadge } from "@/components/orders/badges";
+import { formatEnum, formatMoney } from "@/components/orders/order-helpers";
 import { btnPrimary, btnSecondary, cardClass, inputClass } from "@/lib/ui";
 
 import {
@@ -38,17 +46,23 @@ export function ThreadPanel({
   const titleId = useId();
   const replyId = useId();
   const [draft, setDraft] = useState("");
+  const [previewImageId, setPreviewImageId] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLUListElement>(null);
+  const linkedOrders = conversation.orders ?? [];
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !pending) {
-        onClose();
+        if (previewImageId) {
+          setPreviewImageId(null);
+        } else {
+          onClose();
+        }
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, pending]);
+  }, [onClose, pending, previewImageId]);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight });
@@ -86,6 +100,25 @@ export function ThreadPanel({
                   Conversation fermée — si le client écrit à nouveau, un nouveau fil sera
                   créé automatiquement.
                 </p>
+              ) : null}
+              {linkedOrders.length > 0 ? (
+                <div className="mt-3">
+                  <p className="text-xs text-zinc-500">Commandes liées :</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {linkedOrders.map((order) => (
+                      <Link
+                        key={order.id}
+                        href={`/commandes?order=${order.id}`}
+                        className="inline-flex flex-wrap items-center gap-1.5 rounded-control border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-800"
+                      >
+                        #{order.order_number} · {formatEnum(order.status)}
+                        {order.status !== "cancelled" ? (
+                          <PaymentStatusBadge status={order.payment_status} />
+                        ) : null}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               ) : null}
             </div>
           </div>
@@ -126,11 +159,27 @@ export function ThreadPanel({
                 <p className="mb-1 text-xs text-zinc-500">
                   {roleLabel(role)} · {formatDate(message.created_at)}
                 </p>
-                <p
+                <div
                   className={`max-w-[85%] rounded-control px-3 py-2 text-sm ${bubble}`}
                 >
-                  {message.display_text}
-                </p>
+                  {message.image ? (
+                    <div className="flex flex-col gap-2">
+                      <AuthenticatedImage
+                        imageId={message.image.id}
+                        alt={message.display_text || "Photo"}
+                        className="max-h-60 min-h-24 max-w-[240px] rounded-control bg-zinc-100 object-contain"
+                        onClick={() => setPreviewImageId(message.image!.id)}
+                      />
+                      <p>{message.display_text || "Photo"}</p>
+                      <ImageTag
+                        image={message.image}
+                        orders={linkedOrders}
+                      />
+                    </div>
+                  ) : (
+                    message.display_text
+                  )}
+                </div>
               </li>
             );
           })}
@@ -172,6 +221,70 @@ export function ThreadPanel({
           </button>
         </form>
       </div>
+      {previewImageId ? (
+        <ImagePreviewDialog
+          imageId={previewImageId}
+          onClose={() => setPreviewImageId(null)}
+        />
+      ) : null}
     </div>
   );
+}
+
+function ImageTag({
+  image,
+  orders,
+}: {
+  image: MessageImage;
+  orders: ConversationListItem["orders"];
+}) {
+  const amount =
+    image.detected_amount != null && image.detected_amount !== "" ? (
+      <span> Montant lu : {formatMoney(image.detected_amount)} (à vérifier)</span>
+    ) : null;
+
+  if (image.classification === "payment_proof" && image.order_id) {
+    const matched = orders.find((order) => order.id === image.order_id);
+    if (matched) {
+      return (
+        <p className="text-xs">
+          <Link
+            href={`/commandes?order=${matched.id}`}
+            className="underline"
+          >
+            Preuve de paiement probable · commande #{matched.order_number}
+          </Link>
+          {amount}
+        </p>
+      );
+    }
+    return (
+      <p className="text-xs text-warning">
+        Preuve de paiement probable · commande à identifier. Ouvrez la
+        commande concernée pour vérifier.
+        {amount}
+      </p>
+    );
+  }
+
+  if (image.classification === "payment_proof") {
+    return (
+      <p className="text-xs text-warning">
+        Preuve de paiement probable · commande à identifier. Ouvrez la
+        commande concernée pour vérifier.
+        {amount}
+      </p>
+    );
+  }
+
+  if (image.classification === "unknown") {
+    return (
+      <p className="text-xs">
+        Image non analysée
+        {amount}
+      </p>
+    );
+  }
+
+  return null;
 }

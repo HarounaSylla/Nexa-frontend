@@ -1,5 +1,12 @@
 import { backendFetch } from "@/lib/api";
 
+export type ConversationOrder = {
+  id: string;
+  order_number: number;
+  status: string;
+  payment_status: string;
+};
+
 export type ConversationListItem = {
   id: string;
   customer_phone: string;
@@ -7,6 +14,14 @@ export type ConversationListItem = {
   last_message_preview: string | null;
   last_message_at: string | null;
   message_count: number;
+  orders: ConversationOrder[];
+};
+
+export type MessageImage = {
+  id: string;
+  classification: string;
+  order_id: string | null;
+  detected_amount: string | number | null;
 };
 
 export type ConversationMessage = {
@@ -14,6 +29,7 @@ export type ConversationMessage = {
   turn_role: string;
   display_text: string;
   created_at: string;
+  image: MessageImage | null;
 };
 
 export type ConversationStatus = {
@@ -23,6 +39,16 @@ export type ConversationStatus = {
 
 export async function listConversations(token: string | null) {
   return backendFetch<ConversationListItem[]>("/conversations", { token });
+}
+
+export async function getConversation(
+  token: string | null,
+  conversationId: string,
+) {
+  return backendFetch<ConversationListItem>(
+    `/conversations/${conversationId}`,
+    { token },
+  );
 }
 
 export async function listConversationMessages(

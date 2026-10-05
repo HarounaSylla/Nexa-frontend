@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { auth } from "@clerk/nextjs/server";
 
 import { ConversationsView } from "@/components/conversations/conversations-view";
@@ -20,9 +22,11 @@ export default async function ConversationsPage() {
   }
 
   return (
-    <ConversationsView
-      initialConversations={conversations}
-      initialError={initialError}
-    />
+    <Suspense>
+      <ConversationsView
+        initialConversations={conversations}
+        initialError={initialError}
+      />
+    </Suspense>
   );
 }

@@ -1,6 +1,13 @@
 import type { NotificationItem } from "@/lib/notifications-api";
 
-export function notificationHref(type: string): string {
+export function notificationHref(item: NotificationItem | string): string {
+  if (typeof item !== "string" && item.type === "payment_proof_received") {
+    if (item.related_type === "order") {
+      return `/commandes?order=${item.related_id}`;
+    }
+    return `/conversations?conversation=${item.related_id}`;
+  }
+  const type = typeof item === "string" ? item : item.type;
   if (type === "new_order") {
     return "/commandes";
   }
@@ -24,6 +31,13 @@ export function notificationSentence(item: NotificationItem): string {
   }
   if (item.type === "product_out_of_stock") {
     return `Rupture de stock : ${stringField(data.product_name)}`;
+  }
+  if (item.type === "payment_proof_received") {
+    const title = stringField(data.title);
+    if (title !== "—") {
+      return title;
+    }
+    return stringField(data.body);
   }
   return item.type;
 }

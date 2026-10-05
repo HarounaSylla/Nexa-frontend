@@ -1,9 +1,11 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { errorMessage } from "@/lib/api";
+import { displayWhatsAppError } from "@/lib/whatsapp-errors";
 import {
   type Deliverer,
   getOrder,
@@ -12,6 +14,10 @@ import {
   type OrderDetail,
   type OrderListItem,
 } from "@/lib/orders-api";
+import {
+  listPaymentLinks,
+  type PaymentLink,
+} from "@/lib/payment-links-api";
 import {
   bannerErrorClass,
   btnPrimary,
@@ -27,6 +33,7 @@ import { PaymentStatusBadge, StatusBadge } from "./badges";
 import { CreateOrderDialog } from "./create-order-dialog";
 import { OrderDetailPanel } from "./order-detail-panel";
 import {
+  canSendPaymentLink,
   displayOrderError,
   formatDate,
   formatEnum,
@@ -43,6 +50,9 @@ export function OrdersView({
   initialError?: string | null;
 }) {
   const { getToken } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const orderParam = searchParams.get("order");
   const [orders, setOrders] = useState(initialOrders);
   const [listError, setListError] = useState<string | null>(initialError);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -55,7 +65,17 @@ export function OrdersView({
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [paymentLinks, setPaymentLinks] = useState<PaymentLink[] | null>(null);
+  const [paymentLinksError, setPaymentLinksError] = useState<string | null>(
+    null,
+  );
+  const [paymentLinksLoading, setPaymentLinksLoading] = useState(false);
   const openRequest = useRef(0);
+  const pendingNotice = useRef<string | null>(null);
+  const paymentLinksRef = useRef<{
+    links: PaymentLink[] | null;
+    error: string | null;
+  }>({ links: null, error: null });
 
   const statuses = useMemo(() => uniqueStatuses(orders), [orders]);
   const activeFilter =
@@ -69,14 +89,46 @@ export function OrdersView({
     return orders.filter((order) => order.status === activeFilter);
   }, [activeFilter, orders]);
 
+  useEffect(() => {
+    if (orderParam) {
+      void openOrder(orderParam);
+      return;
+    }
+    closeOrderLocal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open from the query string only
+  }, [orderParam]);
+
+  async function loadPaymentLinks(force = false) {
+    if (!force && paymentLinksRef.current.links && !paymentLinksRef.current.error) {
+      return;
+    }
+    setPaymentLinksLoading(true);
+    try {
+      const links = await listPaymentLinks(await getToken());
+      paymentLinksRef.current = { links, error: null };
+      setPaymentLinks(links);
+      setPaymentLinksError(null);
+    } catch {
+      paymentLinksRef.current = {
+        links: paymentLinksRef.current.links,
+        error: "Impossible de charger vos liens de paiement.",
+      };
+      setPaymentLinksError("Impossible de charger vos liens de paiement.");
+    } finally {
+      setPaymentLinksLoading(false);
+    }
+  }
+
   async function openOrder(orderId: string) {
     const requestId = ++openRequest.current;
+    const keepNotice = pendingNotice.current;
+    pendingNotice.current = null;
     setSelectedId(orderId);
     setDetail(null);
     setDetailLoading(true);
     setDetailError(null);
     setActionError(null);
-    setNotice(null);
+    setNotice(keepNotice);
     try {
       const token = await getToken();
       const [nextDetail, nextDeliverers] = await Promise.all([
@@ -88,6 +140,9 @@ export function OrdersView({
       }
       setDetail(nextDetail);
       setDeliverers(nextDeliverers);
+      if (canSendPaymentLink(nextDetail)) {
+        void loadPaymentLinks();
+      }
     } catch (err) {
       if (requestId !== openRequest.current) {
         return;
@@ -100,7 +155,7 @@ export function OrdersView({
     }
   }
 
-  function closeOrder() {
+  function closeOrderLocal() {
     openRequest.current += 1;
     setSelectedId(null);
     setDetail(null);
@@ -108,6 +163,13 @@ export function OrdersView({
     setDetailError(null);
     setNotice(null);
     setActionError(null);
+  }
+
+  function closeOrder() {
+    closeOrderLocal();
+    if (orderParam) {
+      router.push("/commandes");
+    }
   }
 
   async function refreshList(token: string | null) {
@@ -119,6 +181,7 @@ export function OrdersView({
   async function runAction(
     action: (token: string | null) => Promise<void>,
     successNotice?: string,
+    options?: { refreshOnError?: boolean },
   ) {
     if (!selectedId) {
       return false;
@@ -141,7 +204,23 @@ export function OrdersView({
       }
       return true;
     } catch (err) {
-      setActionError(displayOrderError(errorMessage(err)));
+      setActionError(
+        displayWhatsAppError(displayOrderError(errorMessage(err))),
+      );
+      if (options?.refreshOnError) {
+        try {
+          const token = await getToken();
+          const [nextDetail, nextDeliverers] = await Promise.all([
+            getOrder(token, selectedId),
+            listDeliverers(token),
+            refreshList(token),
+          ]);
+          setDetail(nextDetail);
+          setDeliverers(nextDeliverers);
+        } catch {
+          // Keep the original action error if the refresh fails.
+        }
+      }
       return false;
     } finally {
       setActionPending(false);
@@ -208,7 +287,7 @@ export function OrdersView({
             <li key={order.id}>
               <button
                 type="button"
-                onClick={() => openOrder(order.id)}
+                onClick={() => router.push(`/commandes?order=${order.id}`)}
                 className={`${cardInteractiveClass} flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:justify-between`}
               >
                 <div className="min-w-0">
@@ -244,8 +323,8 @@ export function OrdersView({
           onCreated={async (orderId, orderNumber) => {
             setCreating(false);
             await refreshList(await getToken());
-            await openOrder(orderId);
-            setNotice(`${formatOrderNumber(orderNumber)} créée.`);
+            pendingNotice.current = `${formatOrderNumber(orderNumber)} créée.`;
+            router.push(`/commandes?order=${orderId}`);
           }}
         />
       ) : null}
@@ -287,12 +366,17 @@ export function OrdersView({
 
       {detail ? (
         <OrderDetailPanel
+          key={detail.id}
           order={detail}
           deliverers={deliverers}
+          paymentLinks={paymentLinks}
+          paymentLinksError={paymentLinksError}
+          paymentLinksLoading={paymentLinksLoading}
           pending={actionPending}
           notice={notice}
           error={actionError}
           onClose={closeOrder}
+          onRetryPaymentLinks={() => void loadPaymentLinks(true)}
           runAction={runAction}
         />
       ) : null}

@@ -1,5 +1,7 @@
 import { backendFetch } from "@/lib/api";
 
+export type PaymentStatus = "pending" | "proof_received" | "paid";
+
 export type OrderListItem = {
   id: string;
   order_number: number;
@@ -7,10 +9,17 @@ export type OrderListItem = {
   city: string | null;
   status: string;
   payment_method: string;
-  payment_status: string;
+  payment_status: PaymentStatus | string;
   payment_link: string | null;
   item_count: number;
   total: string | number;
+  created_at: string;
+};
+
+export type OrderProof = {
+  id: string;
+  classification: string;
+  detected_amount: string | number | null;
   created_at: string;
 };
 
@@ -30,6 +39,10 @@ export type AssignedDeliverer = {
 export type OrderDetail = OrderListItem & {
   items: OrderLineItem[];
   deliverer: AssignedDeliverer | null;
+  payment_link_sent_at: string | null;
+  payment_link_label: string | null;
+  conversation_id: string | null;
+  proofs: OrderProof[];
 };
 
 export type Deliverer = {
@@ -105,15 +118,15 @@ export async function getOrder(token: string | null, orderId: string) {
   return backendFetch<OrderDetail>(`/orders/${orderId}`, { token });
 }
 
-export async function setPaymentLink(
+export async function sendPaymentLink(
   token: string | null,
   orderId: string,
-  paymentLink: string,
+  paymentLinkId: string,
 ) {
-  return backendFetch<OrderDetail>(`/orders/${orderId}/payment-link`, {
+  return backendFetch<OrderDetail>(`/orders/${orderId}/send-payment-link`, {
     token,
-    method: "PATCH",
-    body: JSON.stringify({ payment_link: paymentLink }),
+    method: "POST",
+    body: JSON.stringify({ payment_link_id: paymentLinkId }),
   });
 }
 
@@ -153,6 +166,13 @@ export async function confirmDelivery(token: string | null, orderId: string) {
 
 export async function markOrderPaid(token: string | null, orderId: string) {
   return backendFetch<OrderDetail>(`/orders/${orderId}/mark-paid`, {
+    token,
+    method: "POST",
+  });
+}
+
+export async function rejectProof(token: string | null, orderId: string) {
+  return backendFetch<OrderDetail>(`/orders/${orderId}/reject-proof`, {
     token,
     method: "POST",
   });

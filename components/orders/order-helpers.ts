@@ -1,4 +1,5 @@
 import type { OrderDetail } from "@/lib/orders-api";
+import { displayPaymentLinkError } from "@/lib/payment-links-api";
 
 const TERMINAL_STATUSES = new Set(["delivered", "cancelled"]);
 
@@ -32,6 +33,7 @@ const DISPLAY_LABELS: Record<string, string> = {
   cash_on_delivery: "Paiement à la livraison",
   online: "Paiement en ligne",
   pending: "Paiement en attente",
+  proof_received: "Preuve reçue — à vérifier",
   paid: "Paiement reçu",
 };
 
@@ -63,7 +65,10 @@ export function displayOrderError(message: string): string {
   if (/^Cannot mark as paid order .+ in status cancelled$/.test(message)) {
     return "Cette commande est annulée : le paiement ne peut pas être enregistré.";
   }
-  return message;
+  if (/^This order is already paid$/.test(message)) {
+    return "Cette commande est déjà payée.";
+  }
+  return displayPaymentLinkError(message);
 }
 
 export function isTerminalStatus(status: string): boolean {
@@ -73,8 +78,8 @@ export function isTerminalStatus(status: string): boolean {
 export function canSendPaymentLink(order: OrderDetail): boolean {
   return (
     order.payment_method === "online" &&
-    !order.payment_link &&
-    !isTerminalStatus(order.status)
+    order.status !== "cancelled" &&
+    order.payment_status !== "paid"
   );
 }
 
@@ -93,9 +98,13 @@ export function canCancelOrder(order: OrderDetail): boolean {
 export function canMarkPaid(order: OrderDetail): boolean {
   return (
     order.payment_method === "online" &&
-    order.payment_status === "pending" &&
+    order.payment_status !== "paid" &&
     order.status !== "cancelled"
   );
+}
+
+export function canRejectProof(order: OrderDetail): boolean {
+  return order.payment_status === "proof_received";
 }
 
 const STATUS_ORDER = [

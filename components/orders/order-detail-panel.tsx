@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, type FormEvent } from "react";
+import Link from "next/link";
 
 import {
   assignDeliverer,
@@ -10,16 +11,20 @@ import {
   type Deliverer,
   markOrderPaid,
   type OrderDetail,
-  setPaymentLink,
+  rejectProof,
+  sendPaymentLink,
 } from "@/lib/orders-api";
+import type { PaymentLink } from "@/lib/payment-links-api";
 
 import {
   bannerErrorClass,
+  bannerInfoClass,
   bannerSuccessClass,
   btnDanger,
   btnDangerGhost,
   btnPrimary,
   btnSecondary,
+  btnWarningOutline,
   cardClass,
   inputClass,
 } from "@/lib/ui";
@@ -30,6 +35,7 @@ import {
   canCancelOrder,
   canConfirmDelivery,
   canMarkPaid,
+  canRejectProof,
   canSendPaymentLink,
   formatDate,
   formatEnum,
@@ -38,25 +44,49 @@ import {
 } from "./order-helpers";
 
 const NEW_DELIVERER = "__new__";
+const sectionClass = "mt-5 border-t border-zinc-100 pt-5";
+
+function inferredPaymentLinkId(
+  order: OrderDetail,
+  links: PaymentLink[],
+): string {
+  const match = links.find((link) => link.url === order.payment_link);
+  if (match) {
+    return match.id;
+  }
+  if (links.length === 1) {
+    return links[0].id;
+  }
+  return "";
+}
 
 export function OrderDetailPanel({
   order,
   deliverers,
+  paymentLinks,
+  paymentLinksError,
+  paymentLinksLoading,
   pending,
   notice,
   error,
   onClose,
+  onRetryPaymentLinks,
   runAction,
 }: {
   order: OrderDetail;
   deliverers: Deliverer[];
+  paymentLinks: PaymentLink[] | null;
+  paymentLinksError: string | null;
+  paymentLinksLoading: boolean;
   pending: boolean;
   notice: string | null;
   error: string | null;
   onClose: () => void;
+  onRetryPaymentLinks: () => void;
   runAction: (
     action: (token: string | null) => Promise<void>,
     notice?: string,
+    options?: { refreshOnError?: boolean },
   ) => Promise<boolean>;
 }) {
   const titleId = useId();
@@ -64,18 +94,22 @@ export function OrderDetailPanel({
   const delivererId = useId();
   const nameId = useId();
   const phoneId = useId();
-  const [paymentLink, setPaymentLinkValue] = useState("");
+  const paidTitleId = useId();
+  const rejectTitleId = useId();
+  const [chosenLinkId, setChosenLinkId] = useState<string | null>(null);
   const [delivererChoice, setDelivererChoice] = useState("");
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmPaid, setConfirmPaid] = useState(false);
-  const paidTitleId = useId();
+  const [confirmReject, setConfirmReject] = useState(false);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !pending) {
-        if (confirmPaid) {
+        if (confirmReject) {
+          setConfirmReject(false);
+        } else if (confirmPaid) {
           setConfirmPaid(false);
         } else if (confirmCancel) {
           setConfirmCancel(false);
@@ -86,31 +120,39 @@ export function OrderDetailPanel({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [confirmCancel, confirmPaid, onClose, pending]);
+  }, [confirmCancel, confirmPaid, confirmReject, onClose, pending]);
 
   const showPaymentLink = canSendPaymentLink(order);
   const showAssign = canAssignDeliverer(order);
   const showConfirm = canConfirmDelivery(order);
   const showMarkPaid = canMarkPaid(order);
+  const showRejectProof = canRejectProof(order);
   const showCancel = canCancelOrder(order);
+  const showProofBlock = order.payment_status === "proof_received";
+  const showMarkPaidInPayment = showMarkPaid && !showProofBlock;
+  const showDeliverySection =
+    Boolean(order.deliverer) || showAssign || showConfirm;
   const showCodPendingHelp =
     order.payment_method === "cash_on_delivery" &&
     order.payment_status === "pending" &&
     order.status !== "cancelled";
   const addingDeliverer = delivererChoice === NEW_DELIVERER;
+  const selectedLinkId =
+    chosenLinkId ??
+    (paymentLinks ? inferredPaymentLinkId(order, paymentLinks) : "");
 
   async function submitPaymentLink(event: FormEvent) {
     event.preventDefault();
-    const url = paymentLink.trim();
-    if (!url) {
+    if (!selectedLinkId) {
       return;
     }
-    const ok = await runAction(async (token) => {
-      await setPaymentLink(token, order.id, url);
-    });
-    if (ok) {
-      setPaymentLinkValue("");
-    }
+    await runAction(
+      async (token) => {
+        await sendPaymentLink(token, order.id, selectedLinkId);
+      },
+      "Lien de paiement envoyé au client sur WhatsApp.",
+      { refreshOnError: true },
+    );
   }
 
   async function submitAssign(event: FormEvent) {
@@ -160,6 +202,15 @@ export function OrderDetailPanel({
     }
   }
 
+  async function submitRejectProof() {
+    const ok = await runAction(async (token) => {
+      await rejectProof(token, order.id);
+    }, "Preuve rejetée. La commande repasse en attente de paiement.");
+    if (ok) {
+      setConfirmReject(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
       <div
@@ -170,93 +221,66 @@ export function OrderDetailPanel({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id={titleId} className="font-display text-lg font-bold tabular-nums">
+            <h2
+              id={titleId}
+              className="font-display text-lg font-bold tabular-nums"
+            >
               {formatOrderNumber(order.order_number)}
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
               {order.customer_phone} · {formatDate(order.created_at)}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={btnSecondary}
-          >
+          <button type="button" onClick={onClose} className={btnSecondary}>
             Fermer
           </button>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusBadge status={order.status} />
           {order.status !== "cancelled" ? (
             <PaymentStatusBadge status={order.payment_status} />
           ) : null}
+          {order.conversation_id ? (
+            <Link
+              href={`/conversations?conversation=${order.conversation_id}`}
+              className="inline-flex h-8 items-center rounded-control px-2 text-sm font-medium text-zinc-700 underline underline-offset-2"
+            >
+              Voir la conversation
+            </Link>
+          ) : null}
         </div>
 
-        <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-zinc-500">Ville</dt>
-            <dd className="font-medium">{order.city ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Mode de paiement</dt>
-            <dd className="font-medium">{formatEnum(order.payment_method)}</dd>
-            {showCodPendingHelp ? (
-              <p className="mt-1 text-sm text-zinc-500">
-                Le paiement sera marqué comme reçu à la confirmation de la
-                livraison.
-              </p>
-            ) : null}
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-zinc-500">Lien de paiement</dt>
-            <dd className="font-medium break-all">
-              {order.payment_link ? (
-                <a
-                  href={order.payment_link}
-                  className="text-info underline"
-                  target="_blank"
-                  rel="noreferrer"
+        {showProofBlock ? (
+          <div className="mt-4">
+            <p className={bannerInfoClass} role="status">
+              Une preuve de paiement a été reçue. Vérifiez le paiement dans
+              votre application avant de confirmer.
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              {showMarkPaid ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setConfirmPaid(true)}
+                  className={`${btnPrimary} w-full sm:flex-1`}
                 >
-                  {order.payment_link}
-                </a>
-              ) : (
-                "Aucun"
-              )}
-            </dd>
+                  Marquer comme payée
+                </button>
+              ) : null}
+              {showRejectProof ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setConfirmReject(true)}
+                  className={`${btnWarningOutline} w-full sm:flex-1`}
+                >
+                  Preuve non valide
+                </button>
+              ) : null}
+            </div>
           </div>
-          <div className="sm:col-span-2">
-            <dt className="text-zinc-500">Livreur</dt>
-            <dd className="font-medium">
-              {order.deliverer
-                ? `${order.deliverer.name} · ${order.deliverer.phone}`
-                : "Non assigné"}
-            </dd>
-          </div>
-        </dl>
-
-        <h3 className="mt-5 text-sm font-semibold">Articles</h3>
-        <ul className="mt-2 divide-y divide-zinc-100 rounded-control border border-zinc-200">
-          {order.items.map((item, index) => (
-            <li
-              key={`${item.product_id}-${index}`}
-              className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
-            >
-              <div>
-                <p className="font-medium">{item.product_name}</p>
-                <p className="text-zinc-500 tabular-nums">
-                  {item.quantity} × {formatMoney(item.unit_price)}
-                </p>
-              </div>
-              <p className="font-medium tabular-nums">
-                {formatMoney(Number(item.unit_price) * item.quantity)}
-              </p>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-right text-sm font-semibold tabular-nums">
-          Total {formatMoney(order.total)}
-        </p>
+        ) : null}
 
         {notice ? (
           <p className={`mt-4 ${bannerSuccessClass}`} role="status">
@@ -270,104 +294,213 @@ export function OrderDetailPanel({
           </p>
         ) : null}
 
+        <section className={sectionClass}>
+          <h3 className="text-sm font-semibold">Détails</h3>
+          <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-zinc-500">Ville</dt>
+              <dd className="font-medium">{order.city ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Mode de paiement</dt>
+              <dd className="font-medium">{formatEnum(order.payment_method)}</dd>
+              {showCodPendingHelp ? (
+                <p className="mt-1 text-sm text-zinc-500">
+                  Le paiement sera marqué comme reçu à la confirmation de la
+                  livraison.
+                </p>
+              ) : null}
+            </div>
+          </dl>
+        </section>
+
+        <section className={sectionClass}>
+          <h3 className="text-sm font-semibold">Articles</h3>
+          <ul className="mt-2 divide-y divide-zinc-100 rounded-control border border-zinc-200">
+            {order.items.map((item, index) => (
+              <li
+                key={`${item.product_id}-${index}`}
+                className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <div>
+                  <p className="font-medium">{item.product_name}</p>
+                  <p className="text-zinc-500 tabular-nums">
+                    {item.quantity} × {formatMoney(item.unit_price)}
+                  </p>
+                </div>
+                <p className="font-medium tabular-nums">
+                  {formatMoney(Number(item.unit_price) * item.quantity)}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-right text-sm font-semibold tabular-nums">
+            Total {formatMoney(order.total)}
+          </p>
+        </section>
+
         {showPaymentLink ? (
-          <form className="mt-5 flex flex-col gap-2" onSubmit={submitPaymentLink}>
-            <label htmlFor={linkId} className="text-sm font-medium">
-              Lien de paiement
-            </label>
-            <input
-              id={linkId}
-              type="url"
-              required
-              value={paymentLink}
-              onChange={(event) => setPaymentLinkValue(event.target.value)}
-              placeholder="https://"
-              className={inputClass}
-            />
-            <button
-              type="submit"
-              disabled={pending}
-              className={btnPrimary}
-            >
-              {pending ? "Enregistrement…" : "Envoyer le lien de paiement"}
-            </button>
-          </form>
-        ) : null}
-
-        {showAssign ? (
-          <form className="mt-5 flex flex-col gap-2" onSubmit={submitAssign}>
-            <label htmlFor={delivererId} className="text-sm font-medium">
-              Assigner un livreur
-            </label>
-            <select
-              id={delivererId}
-              required
-              value={delivererChoice}
-              onChange={(event) => setDelivererChoice(event.target.value)}
-              className={inputClass}
-            >
-              <option value="">Choisir un livreur</option>
-              {deliverers.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name} · {person.phone}
-                </option>
-              ))}
-              <option value={NEW_DELIVERER}>Ajouter un nouveau livreur</option>
-            </select>
-            {addingDeliverer ? (
-              <>
-                <label htmlFor={nameId} className="text-sm font-medium">
-                  Nom du livreur
+          <section className={sectionClass}>
+            <h3 className="text-sm font-semibold">Paiement</h3>
+            {paymentLinksError ? (
+              <div className="mt-3">
+                <p className={bannerErrorClass} role="alert">
+                  {paymentLinksError}
+                </p>
+                <button
+                  type="button"
+                  disabled={paymentLinksLoading}
+                  onClick={onRetryPaymentLinks}
+                  className={`${btnSecondary} mt-3`}
+                >
+                  {paymentLinksLoading ? "Chargement…" : "Réessayer"}
+                </button>
+              </div>
+            ) : paymentLinksLoading && paymentLinks === null ? (
+              <p className="mt-3 text-sm text-zinc-500">Chargement…</p>
+            ) : paymentLinks && paymentLinks.length === 0 ? (
+              <p className="mt-3 text-sm text-zinc-500">
+                Aucun lien de paiement enregistré.{" "}
+                <Link href="/parametres" className="underline underline-offset-2">
+                  Ajouter un lien dans les paramètres
+                </Link>
+              </p>
+            ) : paymentLinks ? (
+              <form className="mt-3 flex flex-col gap-2" onSubmit={submitPaymentLink}>
+                <label htmlFor={linkId} className="text-sm font-medium">
+                  Lien de paiement à envoyer
                 </label>
-                <input
-                  id={nameId}
-                  required
-                  value={newName}
-                  onChange={(event) => setNewName(event.target.value)}
-                  className={inputClass}
-                />
-                <label htmlFor={phoneId} className="text-sm font-medium">
-                  Téléphone du livreur
-                </label>
-                <input
-                  id={phoneId}
-                  required
-                  value={newPhone}
-                  onChange={(event) => setNewPhone(event.target.value)}
-                  className={inputClass}
-                />
-              </>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                  <select
+                    id={linkId}
+                    value={selectedLinkId}
+                    onChange={(event) => setChosenLinkId(event.target.value)}
+                    className={`${inputClass} min-w-0 flex-1`}
+                  >
+                    {selectedLinkId === "" ? (
+                      <option value="" disabled>
+                        Choisir un lien
+                      </option>
+                    ) : null}
+                    {paymentLinks.map((link) => (
+                      <option key={link.id} value={link.id}>
+                        {link.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex flex-col gap-1 sm:shrink-0">
+                    <button
+                      type="submit"
+                      disabled={pending || !selectedLinkId}
+                      className={btnPrimary}
+                    >
+                      {pending
+                        ? "Envoi…"
+                        : order.payment_link_sent_at
+                          ? "Renvoyer le lien"
+                          : "Envoyer le lien"}
+                    </button>
+                    {order.payment_link_sent_at ? (
+                      <p className="text-sm text-zinc-500">
+                        {order.payment_link_label
+                          ? `Lien ${order.payment_link_label} envoyé le ${formatDate(order.payment_link_sent_at)}.`
+                          : `Lien envoyé le ${formatDate(order.payment_link_sent_at)}.`}
+                      </p>
+                    ) : order.payment_link ? (
+                      <p className="text-sm text-warning">
+                        Pas encore envoyé au client.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </form>
             ) : null}
-            <button
-              type="submit"
-              disabled={pending}
-              className={btnPrimary}
-            >
-              {pending ? "Enregistrement…" : "Assigner un livreur"}
-            </button>
-          </form>
+
+            {showMarkPaidInPayment ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setConfirmPaid(true)}
+                className={`${btnPrimary} mt-4 w-full`}
+              >
+                Marquer comme payée
+              </button>
+            ) : null}
+          </section>
         ) : null}
 
-        {showConfirm ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={submitConfirm}
-            className={`${btnPrimary} mt-5 w-full`}
-          >
-            {pending ? "Enregistrement…" : "Confirmer la livraison"}
-          </button>
-        ) : null}
+        {showDeliverySection ? (
+          <section className={sectionClass}>
+            <h3 className="text-sm font-semibold">Livraison</h3>
+            {order.deliverer ? (
+              <p className="mt-3 text-sm">
+                Livreur : {order.deliverer.name} · {order.deliverer.phone}
+              </p>
+            ) : showAssign ? (
+              <form className="mt-3 flex flex-col gap-2" onSubmit={submitAssign}>
+                <label htmlFor={delivererId} className="text-sm font-medium">
+                  Assigner un livreur
+                </label>
+                <select
+                  id={delivererId}
+                  required
+                  value={delivererChoice}
+                  onChange={(event) => setDelivererChoice(event.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">Choisir un livreur</option>
+                  {deliverers.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name} · {person.phone}
+                    </option>
+                  ))}
+                  <option value={NEW_DELIVERER}>Ajouter un nouveau livreur</option>
+                </select>
+                {addingDeliverer ? (
+                  <>
+                    <label htmlFor={nameId} className="text-sm font-medium">
+                      Nom du livreur
+                    </label>
+                    <input
+                      id={nameId}
+                      required
+                      value={newName}
+                      onChange={(event) => setNewName(event.target.value)}
+                      className={inputClass}
+                    />
+                    <label htmlFor={phoneId} className="text-sm font-medium">
+                      Téléphone du livreur
+                    </label>
+                    <input
+                      id={phoneId}
+                      required
+                      value={newPhone}
+                      onChange={(event) => setNewPhone(event.target.value)}
+                      className={inputClass}
+                    />
+                  </>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className={btnPrimary}
+                >
+                  {pending ? "Enregistrement…" : "Assigner un livreur"}
+                </button>
+              </form>
+            ) : null}
 
-        {showMarkPaid ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setConfirmPaid(true)}
-            className={`${btnPrimary} mt-5 w-full`}
-          >
-            Marquer comme payée
-          </button>
+            {showConfirm ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={submitConfirm}
+                className={`${btnPrimary} mt-4 w-full`}
+              >
+                {pending ? "Enregistrement…" : "Confirmer la livraison"}
+              </button>
+            ) : null}
+          </section>
         ) : null}
 
         {showCancel ? (
@@ -375,7 +508,7 @@ export function OrderDetailPanel({
             type="button"
             disabled={pending}
             onClick={() => setConfirmCancel(true)}
-            className={`${btnDangerGhost} mt-3 h-11 w-full`}
+            className={`${btnDangerGhost} mt-5 h-11 w-full`}
           >
             Annuler la commande
           </button>
@@ -393,9 +526,9 @@ export function OrderDetailPanel({
                 Confirmer le paiement ?
               </h3>
               <p className="mt-2 text-sm text-zinc-500">
-                Vous confirmez avoir reçu le paiement de{" "}
-                {formatMoney(order.total)} pour la commande #
-                {order.order_number}. Cette action ne peut pas être annulée.
+                {order.payment_status === "proof_received"
+                  ? `Vérifiez que le paiement de ${formatMoney(order.total)} pour la commande #${order.order_number} est bien arrivé dans votre application. Cette action ne peut pas être annulée.`
+                  : `Vous confirmez avoir reçu le paiement de ${formatMoney(order.total)} pour la commande #${order.order_number}. Cette action ne peut pas être annulée.`}
               </p>
               <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button
@@ -419,6 +552,44 @@ export function OrderDetailPanel({
           </div>
         ) : null}
 
+        {confirmReject ? (
+          <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={rejectTitleId}
+              className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-md sm:rounded-card`}
+            >
+              <h3 id={rejectTitleId} className="font-display text-lg font-bold">
+                Le paiement n&apos;est pas arrivé ?
+              </h3>
+              <p className="mt-2 text-sm text-zinc-500">
+                La commande repassera en « Paiement en attente ». Les photos
+                reçues sont conservées. Le client n&apos;est pas prévenu :
+                écrivez-lui depuis la page Conversations.
+              </p>
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setConfirmReject(false)}
+                  className={btnSecondary}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={submitRejectProof}
+                  className={btnPrimary}
+                >
+                  {pending ? "Enregistrement…" : "Oui, preuve non valide"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {confirmCancel ? (
           <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
             <div
@@ -427,7 +598,10 @@ export function OrderDetailPanel({
               aria-labelledby="cancel-order-title"
               className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-md sm:rounded-card`}
             >
-              <h3 id="cancel-order-title" className="font-display text-lg font-bold">
+              <h3
+                id="cancel-order-title"
+                className="font-display text-lg font-bold"
+              >
                 Annuler cette commande ?
               </h3>
               <p className="mt-2 text-sm text-zinc-500">

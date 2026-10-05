@@ -133,7 +133,7 @@ export function NotificationBell() {
         );
       }
       setOpen(false);
-      router.push(notificationHref(item.type));
+      router.push(notificationHref(item));
     } catch (err) {
       setError(errorMessage(err));
     } finally {

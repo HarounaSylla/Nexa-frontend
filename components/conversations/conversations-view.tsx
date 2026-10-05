@@ -1,12 +1,15 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { errorMessage } from "@/lib/api";
+import { displayWhatsAppError } from "@/lib/whatsapp-errors";
 import {
   type ConversationListItem,
   type ConversationMessage,
+  getConversation,
   listConversationMessages,
   listConversations,
   replyToConversation,
@@ -41,6 +44,9 @@ export function ConversationsView({
   initialError?: string | null;
 }) {
   const { getToken } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const conversationParam = searchParams.get("conversation");
   const [conversations, setConversations] = useState(initialConversations);
   const [listError, setListError] = useState<string | null>(initialError);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -72,10 +78,38 @@ export function ConversationsView({
     setStatusFilter("all");
   }
 
+  useEffect(() => {
+    if (conversationParam) {
+      void openFromQuery(conversationParam);
+      return;
+    }
+    closeThreadLocal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open from the query string only
+  }, [conversationParam]);
+
   async function refreshList(token: string | null) {
     const next = await listConversations(token);
     setConversations(next);
     setListError(null);
+  }
+
+  async function openFromQuery(conversationId: string) {
+    if (!conversations.some((row) => row.id === conversationId)) {
+      try {
+        const fetched = await getConversation(await getToken(), conversationId);
+        setConversations((current) =>
+          current.some((row) => row.id === fetched.id)
+            ? current
+            : [{ ...fetched, orders: fetched.orders ?? [] }, ...current],
+        );
+      } catch (err) {
+        setSelectedId(conversationId);
+        setThreadError(errorMessage(err));
+        setThreadLoading(false);
+        return;
+      }
+    }
+    await openThread(conversationId);
   }
 
   async function openThread(conversationId: string) {
@@ -102,12 +136,19 @@ export function ConversationsView({
     }
   }
 
-  function closeThread() {
+  function closeThreadLocal() {
     openRequest.current += 1;
     setSelectedId(null);
     setMessages([]);
     setThreadLoading(false);
     setThreadError(null);
+  }
+
+  function closeThread() {
+    closeThreadLocal();
+    if (conversationParam) {
+      router.push("/conversations");
+    }
   }
 
   async function onReply(text: string) {
@@ -123,7 +164,7 @@ export function ConversationsView({
       await refreshList(token);
       return true;
     } catch (err) {
-      setThreadError(errorMessage(err));
+      setThreadError(displayWhatsAppError(errorMessage(err)));
       return false;
     } finally {
       setPending(false);
@@ -226,7 +267,9 @@ export function ConversationsView({
                 <li key={row.id}>
                   <button
                     type="button"
-                    onClick={() => openThread(row.id)}
+                    onClick={() =>
+                      router.push(`/conversations?conversation=${row.id}`)
+                    }
                     className={`${cardInteractiveClass} flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:justify-between ${
                       isEscalated(row.status)
                         ? "border-l-4 border-l-warning"
@@ -247,6 +290,13 @@ export function ConversationsView({
                           ? ` · ${formatDate(row.last_message_at)}`
                           : ""}
                       </p>
+                      {(row.orders ?? []).length > 0 ? (
+                        <p className="text-xs text-zinc-500">
+                          {(row.orders ?? []).length === 1
+                            ? `Commande #${(row.orders ?? [])[0].order_number}`
+                            : `${(row.orders ?? []).length} commandes`}
+                        </p>
+                      ) : null}
                     </div>
                     <ConversationStatusBadge status={row.status} />
                   </button>
