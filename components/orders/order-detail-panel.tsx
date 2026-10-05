@@ -7,7 +7,6 @@ import {
   assignDeliverer,
   cancelOrder,
   confirmDelivery,
-  createDeliverer,
   type Deliverer,
   markOrderPaid,
   type OrderDetail,
@@ -30,6 +29,7 @@ import {
 } from "@/lib/ui";
 
 import { PaymentStatusBadge, StatusBadge } from "./badges";
+import { DelivererFormDialog } from "./deliverer-form-dialog";
 import {
   canAssignDeliverer,
   canCancelOrder,
@@ -43,8 +43,8 @@ import {
   formatOrderNumber,
 } from "./order-helpers";
 
-const NEW_DELIVERER = "__new__";
 const sectionClass = "mt-5 border-t border-zinc-100 pt-5";
+const modifierBtnClass = `${btnSecondary} h-10 min-h-10 shrink-0 px-3`;
 
 function inferredPaymentLinkId(
   order: OrderDetail,
@@ -71,6 +71,7 @@ export function OrderDetailPanel({
   error,
   onClose,
   onRetryPaymentLinks,
+  onSaveDeliverer,
   runAction,
 }: {
   order: OrderDetail;
@@ -83,6 +84,10 @@ export function OrderDetailPanel({
   error: string | null;
   onClose: () => void;
   onRetryPaymentLinks: () => void;
+  onSaveDeliverer: (
+    input: { name: string; phone: string },
+    existingId?: string,
+  ) => Promise<Deliverer>;
   runAction: (
     action: (token: string | null) => Promise<void>,
     notice?: string,
@@ -91,36 +96,46 @@ export function OrderDetailPanel({
 }) {
   const titleId = useId();
   const linkId = useId();
-  const delivererId = useId();
-  const nameId = useId();
-  const phoneId = useId();
+  const delivererGroupId = useId();
   const paidTitleId = useId();
   const rejectTitleId = useId();
   const [chosenLinkId, setChosenLinkId] = useState<string | null>(null);
   const [delivererChoice, setDelivererChoice] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newPhone, setNewPhone] = useState("");
+  const [delivererDialog, setDelivererDialog] = useState<
+    { mode: "add" } | { mode: "edit"; deliverer: Deliverer } | null
+  >(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmPaid, setConfirmPaid] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !pending) {
-        if (confirmReject) {
-          setConfirmReject(false);
-        } else if (confirmPaid) {
-          setConfirmPaid(false);
-        } else if (confirmCancel) {
-          setConfirmCancel(false);
-        } else {
-          onClose();
-        }
+      if (event.key !== "Escape" || pending) {
+        return;
+      }
+      if (delivererDialog) {
+        return;
+      }
+      if (confirmReject) {
+        setConfirmReject(false);
+      } else if (confirmPaid) {
+        setConfirmPaid(false);
+      } else if (confirmCancel) {
+        setConfirmCancel(false);
+      } else {
+        onClose();
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [confirmCancel, confirmPaid, confirmReject, onClose, pending]);
+  }, [
+    confirmCancel,
+    confirmPaid,
+    confirmReject,
+    delivererDialog,
+    onClose,
+    pending,
+  ]);
 
   const showPaymentLink = canSendPaymentLink(order);
   const showAssign = canAssignDeliverer(order);
@@ -136,7 +151,10 @@ export function OrderDetailPanel({
     order.payment_method === "cash_on_delivery" &&
     order.payment_status === "pending" &&
     order.status !== "cancelled";
-  const addingDeliverer = delivererChoice === NEW_DELIVERER;
+  const assignedDeliverer = order.deliverer;
+  const chosenDeliverer = deliverers.some(
+    (person) => person.id === delivererChoice,
+  );
   const selectedLinkId =
     chosenLinkId ??
     (paymentLinks ? inferredPaymentLinkId(order, paymentLinks) : "");
@@ -157,24 +175,24 @@ export function OrderDetailPanel({
 
   async function submitAssign(event: FormEvent) {
     event.preventDefault();
+    if (!chosenDeliverer) {
+      return;
+    }
     const ok = await runAction(async (token) => {
-      let nextId = delivererChoice;
-      if (addingDeliverer) {
-        const created = await createDeliverer(token, {
-          name: newName.trim(),
-          phone: newPhone.trim(),
-        });
-        nextId = created.id;
-      }
-      if (!nextId) {
-        throw new Error("Choisissez un livreur ou ajoutez-en un nouveau.");
-      }
-      await assignDeliverer(token, order.id, nextId);
+      await assignDeliverer(token, order.id, delivererChoice);
     });
     if (ok) {
       setDelivererChoice("");
-      setNewName("");
-      setNewPhone("");
+    }
+  }
+
+  async function saveDeliverer(input: { name: string; phone: string }) {
+    const existingId =
+      delivererDialog?.mode === "edit" ? delivererDialog.deliverer.id : undefined;
+    const saved = await onSaveDeliverer(input, existingId);
+    setDelivererDialog(null);
+    if (!existingId) {
+      setDelivererChoice(saved.id);
     }
   }
 
@@ -432,57 +450,92 @@ export function OrderDetailPanel({
         {showDeliverySection ? (
           <section className={sectionClass}>
             <h3 className="text-sm font-semibold">Livraison</h3>
-            {order.deliverer ? (
-              <p className="mt-3 text-sm">
-                Livreur : {order.deliverer.name} · {order.deliverer.phone}
-              </p>
-            ) : showAssign ? (
-              <form className="mt-3 flex flex-col gap-2" onSubmit={submitAssign}>
-                <label htmlFor={delivererId} className="text-sm font-medium">
-                  Assigner un livreur
-                </label>
-                <select
-                  id={delivererId}
-                  required
-                  value={delivererChoice}
-                  onChange={(event) => setDelivererChoice(event.target.value)}
-                  className={inputClass}
+            {assignedDeliverer ? (
+              <div className="mt-3 flex items-start gap-2">
+                <p className="min-w-0 flex-1 text-sm">
+                  Livreur : {assignedDeliverer.name} · {assignedDeliverer.phone}
+                </p>
+                <button
+                  type="button"
+                  aria-label={`Modifier ${assignedDeliverer.name}`}
+                  disabled={pending}
+                  onClick={() =>
+                    setDelivererDialog({
+                      mode: "edit",
+                      deliverer: assignedDeliverer,
+                    })
+                  }
+                  className={modifierBtnClass}
                 >
-                  <option value="">Choisir un livreur</option>
-                  {deliverers.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name} · {person.phone}
-                    </option>
-                  ))}
-                  <option value={NEW_DELIVERER}>Ajouter un nouveau livreur</option>
-                </select>
-                {addingDeliverer ? (
-                  <>
-                    <label htmlFor={nameId} className="text-sm font-medium">
-                      Nom du livreur
-                    </label>
-                    <input
-                      id={nameId}
-                      required
-                      value={newName}
-                      onChange={(event) => setNewName(event.target.value)}
-                      className={inputClass}
-                    />
-                    <label htmlFor={phoneId} className="text-sm font-medium">
-                      Téléphone du livreur
-                    </label>
-                    <input
-                      id={phoneId}
-                      required
-                      value={newPhone}
-                      onChange={(event) => setNewPhone(event.target.value)}
-                      className={inputClass}
-                    />
-                  </>
-                ) : null}
+                  Modifier
+                </button>
+              </div>
+            ) : showAssign ? (
+              <form className="mt-3 flex flex-col gap-3" onSubmit={submitAssign}>
+                <fieldset className="min-w-0">
+                  <legend className="text-sm font-medium">
+                    Assigner un livreur
+                  </legend>
+                  {deliverers.length === 0 ? (
+                    <p className="mt-2 text-sm text-zinc-500">
+                      Aucun livreur enregistré.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 max-h-56 overflow-y-auto">
+                      {deliverers.map((person) => (
+                        <li
+                          key={person.id}
+                          className="flex items-center gap-2 py-1"
+                        >
+                          <label className="flex min-w-0 flex-1 items-start gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name={delivererGroupId}
+                              value={person.id}
+                              checked={delivererChoice === person.id}
+                              onChange={() => setDelivererChoice(person.id)}
+                              className="mt-1 size-4 shrink-0 accent-accent"
+                            />
+                            <span className="min-w-0">
+                              <span className="font-bold">{person.name}</span>
+                              <span className="text-zinc-500">
+                                {" "}
+                                · {person.phone}
+                              </span>
+                            </span>
+                          </label>
+                          <button
+                            type="button"
+                            aria-label={`Modifier ${person.name}`}
+                            disabled={pending}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setDelivererDialog({
+                                mode: "edit",
+                                deliverer: person,
+                              });
+                            }}
+                            className={modifierBtnClass}
+                          >
+                            Modifier
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </fieldset>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setDelivererDialog({ mode: "add" })}
+                  className={btnSecondary}
+                >
+                  Ajouter un livreur
+                </button>
                 <button
                   type="submit"
-                  disabled={pending}
+                  disabled={pending || !chosenDeliverer}
                   className={btnPrimary}
                 >
                   {pending ? "Enregistrement…" : "Assigner un livreur"}
@@ -628,6 +681,19 @@ export function OrderDetailPanel({
               </div>
             </div>
           </div>
+        ) : null}
+
+        {delivererDialog ? (
+          <DelivererFormDialog
+            mode={delivererDialog.mode}
+            deliverer={
+              delivererDialog.mode === "edit"
+                ? delivererDialog.deliverer
+                : undefined
+            }
+            onClose={() => setDelivererDialog(null)}
+            onSubmit={saveDeliverer}
+          />
         ) : null}
       </div>
     </div>

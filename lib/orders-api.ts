@@ -1,4 +1,4 @@
-import { backendFetch } from "@/lib/api";
+import { BackendApiError, backendFetch } from "@/lib/api";
 
 export type PaymentStatus = "pending" | "proof_received" | "paid";
 
@@ -144,6 +144,69 @@ export async function createDeliverer(
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function updateDeliverer(
+  token: string | null,
+  delivererId: string,
+  input: { name: string; phone: string },
+) {
+  return backendFetch<Deliverer>(`/deliverers/${delivererId}`, {
+    token,
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+function validationField(detail: unknown): "name" | "phone" | null {
+  if (typeof detail !== "object" || detail === null) {
+    return null;
+  }
+  const nested =
+    "detail" in detail ? (detail as { detail: unknown }).detail : detail;
+  const entries = Array.isArray(nested) ? nested : [nested];
+  for (const entry of entries) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const loc = (entry as { loc?: unknown }).loc;
+    const parts = Array.isArray(loc) ? loc.map(String) : [];
+    if (parts.includes("phone")) {
+      return "phone";
+    }
+    if (parts.includes("name")) {
+      return "name";
+    }
+    const msg = (entry as { msg?: unknown }).msg;
+    if (typeof msg === "string" && /phone/i.test(msg)) {
+      return "phone";
+    }
+    if (typeof msg === "string" && /name|character/i.test(msg)) {
+      return "name";
+    }
+  }
+  return null;
+}
+
+export function delivererErrorFromUnknown(err: unknown): string {
+  if (err instanceof BackendApiError) {
+    if (err.status === 409) {
+      return "Un livreur utilise déjà ce numéro.";
+    }
+    if (err.status === 404) {
+      return "Ce livreur n'existe plus. Actualisez la page.";
+    }
+    if (err.status === 422) {
+      const field = validationField(err.detail);
+      if (field === "phone") {
+        return "Numéro de téléphone invalide.";
+      }
+      if (field === "name") {
+        return "Indiquez le nom du livreur.";
+      }
+    }
+  }
+  return "Impossible d'enregistrer le livreur. Réessayez.";
 }
 
 export async function assignDeliverer(

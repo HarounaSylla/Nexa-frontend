@@ -8,11 +8,13 @@ import { errorMessage } from "@/lib/api";
 import { displayWhatsAppError } from "@/lib/whatsapp-errors";
 import {
   type Deliverer,
+  createDeliverer,
   getOrder,
   listDeliverers,
   listOrders,
   type OrderDetail,
   type OrderListItem,
+  updateDeliverer,
 } from "@/lib/orders-api";
 import {
   listPaymentLinks,
@@ -227,6 +229,24 @@ export function OrdersView({
     }
   }
 
+  async function saveDeliverer(
+    input: { name: string; phone: string },
+    existingId?: string,
+  ) {
+    const token = await getToken();
+    const saved = existingId
+      ? await updateDeliverer(token, existingId, input)
+      : await createDeliverer(token, input);
+    const nextDeliverers = await listDeliverers(token);
+    setDeliverers(nextDeliverers);
+    setActionError(null);
+    setNotice(existingId ? "Livreur modifié." : "Livreur ajouté.");
+    if (existingId && detail?.deliverer?.id === existingId) {
+      setDetail(await getOrder(token, detail.id));
+    }
+    return saved;
+  }
+
   if (listError) {
     return (
       <div className="mx-auto w-full max-w-5xl">
@@ -377,6 +397,7 @@ export function OrdersView({
           error={actionError}
           onClose={closeOrder}
           onRetryPaymentLinks={() => void loadPaymentLinks(true)}
+          onSaveDeliverer={saveDeliverer}
           runAction={runAction}
         />
       ) : null}
