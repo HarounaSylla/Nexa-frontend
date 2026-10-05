@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/orders/badges";
 import { formatMoney } from "@/components/orders/order-helpers";
 import {
   formatRelativeTime,
+  notificationSecondary,
   notificationSentence,
   unreadCount,
 } from "@/components/notifications/notification-copy";
@@ -184,6 +185,11 @@ export function DashboardView({
                     <p className={unreadItem ? "font-medium text-zinc-900" : "text-zinc-600"}>
                       {notificationSentence(item)}
                     </p>
+                    {notificationSecondary(item) ? (
+                      <p className="mt-0.5 text-xs font-normal text-zinc-500">
+                        {notificationSecondary(item)}
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-xs text-zinc-500">
                       {formatRelativeTime(item.created_at)}
                     </p>

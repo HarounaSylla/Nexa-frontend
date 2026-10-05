@@ -21,6 +21,7 @@ export type OrderProof = {
   classification: string;
   detected_amount: string | number | null;
   created_at: string;
+  deleted: boolean;
 };
 
 export type OrderLineItem = {

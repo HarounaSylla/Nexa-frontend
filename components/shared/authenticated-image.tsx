@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useId, useState } from "react";
 
-import { fetchImageBlob } from "@/lib/images-api";
+import { fetchImageBlob, isDeletedImageError } from "@/lib/images-api";
 import { btnSecondary, cardClass } from "@/lib/ui";
 
 export function AuthenticatedImage({
@@ -11,20 +11,26 @@ export function AuthenticatedImage({
   alt,
   className,
   onClick,
+  deleted = false,
 }: {
   imageId: string;
   alt: string;
   className?: string;
   onClick?: () => void;
+  deleted?: boolean;
 }) {
   const { getToken } = useAuth();
   const [result, setResult] = useState<{
     imageId: string;
     src: string | null;
     ok: boolean;
+    gone: boolean;
   } | null>(null);
 
   useEffect(() => {
+    if (deleted) {
+      return;
+    }
     let cancelled = false;
     let objectUrl: string | null = null;
     (async () => {
@@ -34,10 +40,11 @@ export function AuthenticatedImage({
           return;
         }
         objectUrl = URL.createObjectURL(blob);
-        setResult({ imageId, src: objectUrl, ok: true });
-      } catch {
+        setResult({ imageId, src: objectUrl, ok: true, gone: false });
+      } catch (error) {
         if (!cancelled) {
-          setResult({ imageId, src: null, ok: false });
+          const gone = isDeletedImageError(error);
+          setResult({ imageId, src: null, ok: false, gone });
         }
       }
     })();
@@ -47,21 +54,30 @@ export function AuthenticatedImage({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [getToken, imageId]);
+  }, [deleted, getToken, imageId]);
+
+  const boxClass = className ?? "h-24 w-24";
+
+  if (deleted) {
+    return <DeletedImageBox className={boxClass} />;
+  }
 
   const current = result?.imageId === imageId ? result : null;
   if (!current) {
     return (
       <div
-        className={`animate-pulse rounded-control bg-zinc-100 ${className ?? "h-24 w-24"}`}
+        className={`animate-pulse rounded-control bg-zinc-100 ${boxClass}`}
         aria-hidden="true"
       />
     );
   }
+  if (current.gone) {
+    return <DeletedImageBox className={boxClass} />;
+  }
   if (!current.ok || !current.src) {
     return (
       <div
-        className={`flex items-center justify-center rounded-control border border-zinc-200 bg-zinc-50 px-2 text-center text-xs text-zinc-500 ${className ?? "h-24 w-24"}`}
+        className={`flex items-center justify-center rounded-control border border-zinc-200 bg-zinc-50 px-2 text-center text-xs text-zinc-500 ${boxClass}`}
         role="alert"
       >
         Image indisponible
@@ -81,6 +97,16 @@ export function AuthenticatedImage({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={current.src} alt={alt} className={className} />
+  );
+}
+
+function DeletedImageBox({ className }: { className: string }) {
+  return (
+    <div
+      className={`flex items-center justify-center rounded-control bg-zinc-100 px-2 text-center text-xs text-zinc-400 ${className}`}
+    >
+      Image supprimée
+    </div>
   );
 }
 

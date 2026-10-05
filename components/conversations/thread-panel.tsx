@@ -168,7 +168,12 @@ export function ThreadPanel({
                         imageId={message.image.id}
                         alt={message.display_text || "Photo"}
                         className="max-h-60 min-h-24 max-w-[240px] rounded-control bg-zinc-100 object-contain"
-                        onClick={() => setPreviewImageId(message.image!.id)}
+                        deleted={Boolean(message.image.deleted)}
+                        onClick={
+                          message.image.deleted
+                            ? undefined
+                            : () => setPreviewImageId(message.image!.id)
+                        }
                       />
                       <p>{message.display_text || "Photo"}</p>
                       <ImageTag

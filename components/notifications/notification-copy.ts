@@ -7,6 +7,9 @@ export function notificationHref(item: NotificationItem | string): string {
     }
     return `/conversations?conversation=${item.related_id}`;
   }
+  if (typeof item !== "string" && item.type === "escalated_customer_message") {
+    return `/conversations?conversation=${item.related_id}`;
+  }
   const type = typeof item === "string" ? item : item.type;
   if (type === "new_order") {
     return "/commandes";
@@ -16,6 +19,9 @@ export function notificationHref(item: NotificationItem | string): string {
   }
   if (type === "product_out_of_stock") {
     return "/catalogue";
+  }
+  if (type === "escalated_customer_message") {
+    return "/conversations";
   }
   return "/dashboard";
 }
@@ -29,6 +35,9 @@ export function notificationSentence(item: NotificationItem): string {
   if (item.type === "conversation_escalated") {
     return `Conversation escaladée avec ${stringField(data.customer_phone)}`;
   }
+  if (item.type === "escalated_customer_message") {
+    return `Nouveau message de ${stringField(data.customer_phone)}`;
+  }
   if (item.type === "product_out_of_stock") {
     return `Rupture de stock : ${stringField(data.product_name)}`;
   }
@@ -40,6 +49,13 @@ export function notificationSentence(item: NotificationItem): string {
     return stringField(data.body);
   }
   return item.type;
+}
+
+export function notificationSecondary(item: NotificationItem): string | null {
+  if (item.type === "escalated_customer_message") {
+    return "Conversation en escalade : la boutique doit répondre.";
+  }
+  return null;
 }
 
 function stringField(value: unknown): string {

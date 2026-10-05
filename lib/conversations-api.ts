@@ -22,6 +22,7 @@ export type MessageImage = {
   classification: string;
   order_id: string | null;
   detected_amount: string | number | null;
+  deleted: boolean;
 };
 
 export type ConversationMessage = {

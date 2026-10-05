@@ -15,6 +15,7 @@ import {
 
 import {
   notificationHref,
+  notificationSecondary,
   notificationSentence,
   unreadCount,
 } from "./notification-copy";
@@ -261,6 +262,7 @@ function NotificationPanelBody({
       <ul className="max-h-[min(24rem,70dvh)] overflow-y-auto p-1">
         {items.map((item) => {
           const unreadItem = item.read_at == null;
+          const secondary = notificationSecondary(item);
           return (
             <li key={item.id}>
               <button
@@ -281,7 +283,14 @@ function NotificationPanelBody({
                 ) : (
                   <span aria-hidden="true" className="mt-1.5 size-2 shrink-0" />
                 )}
-                <span>{notificationSentence(item)}</span>
+                <span className="min-w-0">
+                  <span className="block">{notificationSentence(item)}</span>
+                  {secondary ? (
+                    <span className="mt-0.5 block text-xs font-normal text-zinc-500">
+                      {secondary}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             </li>
           );

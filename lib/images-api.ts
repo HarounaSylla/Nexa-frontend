@@ -30,3 +30,7 @@ export async function fetchImageBlob(
 
   return response.blob();
 }
+
+export function isDeletedImageError(error: unknown): boolean {
+  return error instanceof BackendApiError && error.status === 410;
+}
