@@ -35,6 +35,22 @@ import { ConversationStatusBadge } from "./status-badge";
 import { ThreadPanel } from "./thread-panel";
 
 const STATUS_FILTERS = ["all", "active", "escalated", "closed"] as const;
+const THREAD_POLL_MS = 5_000;
+const LIST_POLL_MS = 20_000;
+
+function mergeMessages(
+  current: ConversationMessage[],
+  next: ConversationMessage[],
+): ConversationMessage[] {
+  if (
+    current.length === next.length &&
+    current.every((message, index) => message.id === next[index].id)
+  ) {
+    return current;
+  }
+  const previous = new Map(current.map((message) => [message.id, message]));
+  return next.map((message) => previous.get(message.id) ?? message);
+}
 
 export function ConversationsView({
   initialConversations,
@@ -57,6 +73,11 @@ export function ConversationsView({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const openRequest = useRef(0);
+  const mutationVersion = useRef(0);
+  const pollInFlight = useRef(false);
+  const threadReadyRef = useRef(false);
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
 
   const selected = conversations.find((row) => row.id === selectedId) ?? null;
   const filtersActive = query.trim() !== "" || statusFilter !== "all";
@@ -87,6 +108,89 @@ export function ConversationsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open from the query string only
   }, [conversationParam]);
 
+  useEffect(() => {
+    if (threadLoading) {
+      return;
+    }
+
+    const intervalMs = selectedId ? THREAD_POLL_MS : LIST_POLL_MS;
+    let cancelled = false;
+
+    async function poll() {
+      if (cancelled || pollInFlight.current) {
+        return;
+      }
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      const conversationId = selectedIdRef.current;
+      if (conversationId && !threadReadyRef.current) {
+        return;
+      }
+      pollInFlight.current = true;
+      const requestId = openRequest.current;
+      const version = mutationVersion.current;
+      try {
+        const token = await getToken();
+        if (conversationId) {
+          const [nextMessages, nextList] = await Promise.all([
+            listConversationMessages(token, conversationId),
+            listConversations(token),
+          ]);
+          if (
+            cancelled ||
+            requestId !== openRequest.current ||
+            version !== mutationVersion.current ||
+            selectedIdRef.current !== conversationId
+          ) {
+            return;
+          }
+          setMessages((current) => mergeMessages(current, nextMessages));
+          setConversations(nextList);
+        } else {
+          const nextList = await listConversations(token);
+          if (cancelled || selectedIdRef.current) {
+            return;
+          }
+          setConversations(nextList);
+        }
+      } catch {
+        // Keep the last good data; polling errors stay silent.
+      } finally {
+        pollInFlight.current = false;
+      }
+    }
+
+    let timer = 0;
+
+    function startTimer() {
+      window.clearInterval(timer);
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      timer = window.setInterval(() => {
+        void poll();
+      }, intervalMs);
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void poll();
+        startTimer();
+      } else {
+        window.clearInterval(timer);
+      }
+    }
+
+    startTimer();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [getToken, selectedId, threadLoading]);
+
   async function refreshList(token: string | null) {
     const next = await listConversations(token);
     setConversations(next);
@@ -114,6 +218,7 @@ export function ConversationsView({
 
   async function openThread(conversationId: string) {
     const requestId = ++openRequest.current;
+    threadReadyRef.current = false;
     setSelectedId(conversationId);
     setMessages([]);
     setThreadLoading(true);
@@ -124,10 +229,12 @@ export function ConversationsView({
         return;
       }
       setMessages(next);
+      threadReadyRef.current = true;
     } catch (err) {
       if (requestId !== openRequest.current) {
         return;
       }
+      threadReadyRef.current = false;
       setThreadError(errorMessage(err));
     } finally {
       if (requestId === openRequest.current) {
@@ -138,6 +245,7 @@ export function ConversationsView({
 
   function closeThreadLocal() {
     openRequest.current += 1;
+    threadReadyRef.current = false;
     setSelectedId(null);
     setMessages([]);
     setThreadLoading(false);
@@ -155,6 +263,7 @@ export function ConversationsView({
     if (!selectedId) {
       return false;
     }
+    mutationVersion.current += 1;
     setPending(true);
     setThreadError(null);
     try {
@@ -167,6 +276,7 @@ export function ConversationsView({
       setThreadError(displayWhatsAppError(errorMessage(err)));
       return false;
     } finally {
+      mutationVersion.current += 1;
       setPending(false);
     }
   }
@@ -175,6 +285,7 @@ export function ConversationsView({
     if (!selectedId) {
       return;
     }
+    mutationVersion.current += 1;
     setPending(true);
     setThreadError(null);
     try {
@@ -188,6 +299,7 @@ export function ConversationsView({
     } catch (err) {
       setThreadError(errorMessage(err));
     } finally {
+      mutationVersion.current += 1;
       setPending(false);
     }
   }

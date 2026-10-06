@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 
 import type {
   ConversationListItem,
@@ -47,7 +54,11 @@ export function ThreadPanel({
   const replyId = useId();
   const [draft, setDraft] = useState("");
   const [previewImageId, setPreviewImageId] = useState<string | null>(null);
+  const [showNewMessages, setShowNewMessages] = useState(false);
+  const [liveTick, setLiveTick] = useState(0);
   const scrollerRef = useRef<HTMLUListElement>(null);
+  const nearBottomRef = useRef(true);
+  const prevMessagesRef = useRef<ConversationMessage[] | null>(null);
   const linkedOrders = conversation.orders ?? [];
 
   useEffect(() => {
@@ -65,19 +76,95 @@ export function ThreadPanel({
   }, [onClose, pending, previewImageId]);
 
   useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight });
-  }, [messages.length]);
+    const scroller = scrollerRef.current;
+    const previous = prevMessagesRef.current;
+    prevMessagesRef.current = messages;
 
-  async function submitReply(event: FormEvent) {
-    event.preventDefault();
+    if (!scroller) {
+      return;
+    }
+    if (previous === null) {
+      scroller.scrollTo({ top: scroller.scrollHeight });
+      nearBottomRef.current = true;
+      return;
+    }
+
+    const knownIds = new Set(previous.map((message) => message.id));
+    const added = messages.filter((message) => !knownIds.has(message.id));
+    if (added.length === 0) {
+      return;
+    }
+
+    const ownReply = added.some((message) => message.turn_role === "merchant");
+    const customerMessage = added.some(
+      (message) => message.turn_role === "customer",
+    );
+    if (nearBottomRef.current || ownReply) {
+      scroller.scrollTo({ top: scroller.scrollHeight });
+      nearBottomRef.current = true;
+      setShowNewMessages(false);
+    } else {
+      setShowNewMessages(true);
+    }
+    if (customerMessage) {
+      setLiveTick((tick) => tick + 1);
+    }
+  }, [messages]);
+
+  function onThreadScroll() {
+    const scroller = scrollerRef.current;
+    if (!scroller) {
+      return;
+    }
+    const nearBottom =
+      scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 80;
+    nearBottomRef.current = nearBottom;
+    if (nearBottom) {
+      setShowNewMessages(false);
+    }
+  }
+
+  function scrollToLatest() {
+    const scroller = scrollerRef.current;
+    if (!scroller) {
+      return;
+    }
+    scroller.scrollTo({ top: scroller.scrollHeight });
+    nearBottomRef.current = true;
+    setShowNewMessages(false);
+  }
+
+  async function sendDraft() {
     const text = draft.trim();
-    if (!text) {
+    if (!text || pending) {
       return;
     }
     const ok = await onReply(text);
     if (ok) {
       setDraft("");
     }
+  }
+
+  function submitReply(event: FormEvent) {
+    event.preventDefault();
+    void sendDraft();
+  }
+
+  function onDraftKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter") {
+      return;
+    }
+    if (event.nativeEvent.isComposing || event.keyCode === 229) {
+      return;
+    }
+    if (window.matchMedia("(pointer: coarse)").matches) {
+      return;
+    }
+    if (event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    void sendDraft();
   }
 
   return (
@@ -127,10 +214,12 @@ export function ThreadPanel({
           </button>
         </div>
 
-        <ul
-          ref={scrollerRef}
-          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4"
-        >
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <ul
+            ref={scrollerRef}
+            onScroll={onThreadScroll}
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4"
+          >
           {messages.map((message) => {
             if (isEscalationNote(message)) {
               return (
@@ -188,7 +277,21 @@ export function ThreadPanel({
               </li>
             );
           })}
-        </ul>
+          </ul>
+          {showNewMessages ? (
+            <button
+              type="button"
+              aria-label="Nouveaux messages"
+              onClick={scrollToLatest}
+              className={`${btnSecondary} absolute bottom-3 left-1/2 z-10 h-10 -translate-x-1/2 shadow-card`}
+            >
+              Nouveaux messages
+            </button>
+          ) : null}
+          <div key={liveTick} className="sr-only" aria-live="polite">
+            {liveTick > 0 ? "Nouveau message du client." : ""}
+          </div>
+        </div>
 
         {error ? (
           <p className="px-5 text-sm text-danger" role="alert">
@@ -217,10 +320,14 @@ export function ThreadPanel({
             id={replyId}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={onDraftKeyDown}
             placeholder="Écrivez votre réponse…"
             rows={3}
             className={`${inputClass} h-auto py-2`}
           />
+          <p className="hidden text-sm text-zinc-500 pointer-fine:block">
+            Entrée pour envoyer · Maj+Entrée pour un saut de ligne
+          </p>
           <button type="submit" disabled={pending} className={btnPrimary}>
             {pending ? "Envoi…" : "Envoyer"}
           </button>
