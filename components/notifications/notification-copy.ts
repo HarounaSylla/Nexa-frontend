@@ -10,6 +10,9 @@ export function notificationHref(item: NotificationItem | string): string {
   if (typeof item !== "string" && item.type === "escalated_customer_message") {
     return `/conversations?conversation=${item.related_id}`;
   }
+  if (typeof item !== "string" && item.type === "product_photo_unrecognized") {
+    return `/conversations?conversation=${item.related_id}`;
+  }
   const type = typeof item === "string" ? item : item.type;
   if (type === "new_order") {
     return "/commandes";
@@ -48,12 +51,22 @@ export function notificationSentence(item: NotificationItem): string {
     }
     return stringField(data.body);
   }
-  return item.type;
+  if (item.type === "product_photo_unrecognized") {
+    const title = stringField(data.title);
+    if (title !== "—") {
+      return title;
+    }
+    return stringField(data.body);
+  }
+  return "Nouvelle notification";
 }
 
 export function notificationSecondary(item: NotificationItem): string | null {
   if (item.type === "escalated_customer_message") {
     return "Conversation en escalade : la boutique doit répondre.";
+  }
+  if (item.type === "product_photo_unrecognized") {
+    return "Une vente est peut-être possible : répondez au client.";
   }
   return null;
 }

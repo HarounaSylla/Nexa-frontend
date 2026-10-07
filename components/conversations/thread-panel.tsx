@@ -398,5 +398,22 @@ function ImageTag({
     );
   }
 
+  if (image.classification === "product_photo") {
+    const name = (image.matched_product_name ?? "").trim();
+    if (image.match_kind === "exact" && name) {
+      return <p className="text-xs">Produit reconnu : {name}</p>;
+    }
+    if (image.match_kind === "similar" && name) {
+      return (
+        <p className="text-xs">
+          Produit proche : {name} (pas exactement le même modèle)
+        </p>
+      );
+    }
+    return (
+      <p className="text-xs text-warning">Photo de produit non reconnue</p>
+    );
+  }
+
   return null;
 }

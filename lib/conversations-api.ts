@@ -23,6 +23,10 @@ export type MessageImage = {
   order_id: string | null;
   detected_amount: string | number | null;
   deleted: boolean;
+  match_level?: string | null;
+  matched_product_id?: string | null;
+  matched_product_name?: string | null;
+  match_kind?: "exact" | "similar" | null;
 };
 
 export type ConversationMessage = {
