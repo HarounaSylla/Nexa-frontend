@@ -40,7 +40,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     href: "/parametres",
     label: "Paramètres",
-    shortLabel: "Réglages",
+    shortLabel: "Paramètres",
     icon: "settings",
   },
 ];

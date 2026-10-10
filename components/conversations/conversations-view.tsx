@@ -4,8 +4,19 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { MessageCircle, Search, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { IconButton } from "@/components/ui/icon-button";
+import { Input } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/toast";
 import { errorMessage } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { displayWhatsAppError } from "@/lib/whatsapp-errors";
 import {
   type ConversationListItem,
@@ -16,17 +27,12 @@ import {
   replyToConversation,
   returnConversationToAgent,
 } from "@/lib/conversations-api";
-import {
-  btnSecondary,
-  cardClass,
-  cardInteractiveClass,
-  emptyStateClass,
-  inputClass,
-} from "@/lib/ui";
+import { focusRingClass } from "@/lib/ui";
 
+import { ConversationAvatar } from "./conversation-avatar";
 import {
   conversationStatusLabel,
-  formatDate,
+  formatListTime,
   isClosed,
   isEscalated,
   normalizePhone,
@@ -296,13 +302,23 @@ export function ConversationsView({
           row.id === updated.id ? { ...row, status: updated.status } : row,
         ),
       );
+      toast.success("Conversation renvoyée à l'agent");
     } catch (err) {
-      setThreadError(errorMessage(err));
+      const message = errorMessage(err);
+      setThreadError(message);
+      toast.error(message);
     } finally {
       mutationVersion.current += 1;
       setPending(false);
     }
   }
+
+  const statusCounts = {
+    all: conversations.length,
+    active: conversations.filter((row) => row.status === "active").length,
+    escalated: conversations.filter((row) => row.status === "escalated").length,
+    closed: conversations.filter((row) => row.status === "closed").length,
+  };
 
   if (listError) {
     return (
@@ -327,127 +343,179 @@ export function ConversationsView({
       />
 
       {conversations.length === 0 ? (
-        <div className={`mt-8 ${emptyStateClass}`}>
-          <p className="font-medium text-zinc-800">Aucune conversation pour le moment</p>
-          <p className="mt-1 text-sm">
-            Les échanges WhatsApp avec vos clients apparaîtront ici.
-          </p>
-        </div>
+        <EmptyState
+          className="mt-8"
+          icon={<MessageCircle className="size-5" aria-hidden="true" />}
+          title="Aucune conversation pour le moment"
+          description="Les échanges WhatsApp avec vos clients apparaîtront ici."
+        />
       ) : (
         <>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium">
+          <div className="relative mt-4">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-400"
+              aria-hidden="true"
+            />
+            <label htmlFor="conversation-search" className="sr-only">
               Rechercher un numéro
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Ex. 77 123 45 67"
-                className={inputClass}
-              />
             </label>
-            <label className="flex max-w-xs flex-col gap-1 text-sm font-medium">
-              Statut
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                className={inputClass}
+            <Input
+              id="conversation-search"
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Ex. 77 123 45 67"
+              className="pr-11 pl-9"
+            />
+            {query ? (
+              <IconButton
+                label="Effacer la recherche"
+                onClick={() => setQuery("")}
+                className="absolute top-1/2 right-0.5 size-10 -translate-y-1/2"
               >
-                {STATUS_FILTERS.map((status) => (
-                  <option key={status} value={status}>
-                    {conversationStatusLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <X className="size-4" aria-hidden="true" />
+              </IconButton>
+            ) : null}
+          </div>
+
+          <div
+            role="group"
+            aria-label="Filtrer par statut"
+            className="mt-3 flex gap-2 overflow-x-auto pb-1"
+          >
+            {STATUS_FILTERS.map((status) => {
+              const selectedFilter = statusFilter === status;
+              const count = statusCounts[status];
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={selectedFilter}
+                  onClick={() => setStatusFilter(status)}
+                  className={cn(
+                    "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium tabular-nums",
+                    "motion-safe:transition-colors motion-safe:duration-150",
+                    focusRingClass,
+                    selectedFilter
+                      ? "bg-accent text-white"
+                      : "bg-accent-soft text-accent-text hover:bg-zinc-200",
+                  )}
+                >
+                  {conversationStatusLabel(status)}
+                  <span className={selectedFilter ? "text-white/80" : "text-zinc-500"}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {visibleConversations.length === 0 ? (
-            <div className={`mt-8 ${emptyStateClass}`}>
-              <p className="font-medium text-zinc-800">
-                Aucune conversation ne correspond à votre recherche
-              </p>
-              <button
-                type="button"
-                onClick={resetFilters}
-                className={`${btnSecondary} mt-4`}
-              >
-                Réinitialiser les filtres
-              </button>
-            </div>
+            <EmptyState
+              className="mt-8"
+              icon={<MessageCircle className="size-5" aria-hidden="true" />}
+              title="Aucune conversation ne correspond à votre recherche"
+              action={
+                <Button variant="secondary" onClick={resetFilters}>
+                  Réinitialiser les filtres
+                </Button>
+              }
+            />
           ) : (
-            <ul className="mt-4 flex flex-col gap-2">
-              {visibleConversations.map((row) => (
-                <li key={row.id}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(`/conversations?conversation=${row.id}`)
-                    }
-                    className={`${cardInteractiveClass} flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:justify-between ${
-                      isEscalated(row.status)
-                        ? "border-l-4 border-l-warning"
-                        : isClosed(row.status)
-                          ? "border-l-4 border-l-zinc-300"
-                          : ""
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium">{row.customer_phone}</p>
-                      <p className="truncate text-sm text-zinc-500">
-                        {row.last_message_preview ?? "Aucun message"}
-                      </p>
-                      <p className="text-sm text-zinc-500">
-                        {row.message_count} message
-                        {row.message_count === 1 ? "" : "s"}
-                        {row.last_message_at
-                          ? ` · ${formatDate(row.last_message_at)}`
-                          : ""}
-                      </p>
-                      {(row.orders ?? []).length > 0 ? (
-                        <p className="text-xs text-zinc-500">
-                          {(row.orders ?? []).length === 1
-                            ? `Commande #${(row.orders ?? [])[0].order_number}`
-                            : `${(row.orders ?? []).length} commandes`}
-                        </p>
-                      ) : null}
-                    </div>
-                    <ConversationStatusBadge status={row.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <Card className="mt-4 overflow-hidden p-0">
+              <ul className="divide-y divide-zinc-100">
+                {visibleConversations.map((row) => {
+                  const orders = row.orders ?? [];
+                  const closed = isClosed(row.status);
+                  return (
+                    <li key={row.id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(`/conversations?conversation=${row.id}`)
+                        }
+                        className={cn(
+                          "flex min-h-[72px] w-full items-center gap-3 px-4 py-3 text-left",
+                          "motion-safe:transition-colors motion-safe:duration-150",
+                          focusRingClass,
+                          "hover:bg-accent-soft",
+                          closed && "text-zinc-500",
+                        )}
+                      >
+                        <ConversationAvatar
+                          phone={row.customer_phone}
+                          escalated={isEscalated(row.status)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={cn(
+                              "truncate font-medium",
+                              closed ? "text-zinc-600" : "text-zinc-900",
+                            )}
+                          >
+                            {row.customer_phone}
+                          </p>
+                          <p className="truncate text-sm text-zinc-500">
+                            {row.last_message_preview ?? "Aucun message"}
+                          </p>
+                          {orders.length > 0 ? (
+                            <p className="truncate text-caption text-zinc-500">
+                              {orders.length === 1
+                                ? `Commande #${orders[0].order_number}`
+                                : `${orders.length} commandes`}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <p className="text-caption tabular-nums text-zinc-500">
+                            {formatListTime(row.last_message_at)}
+                          </p>
+                          <ConversationStatusBadge status={row.status} />
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
           )}
         </>
       )}
 
-      {selectedId && threadLoading && !selected ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Chargement de la conversation"
-            className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-lg sm:rounded-card`}
-          >
-            <p className="text-sm text-zinc-500">Chargement de la conversation…</p>
+      <Dialog
+        open={Boolean(selectedId && threadLoading && !selected)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeThread();
+          }
+        }}
+      >
+        <DialogContent title="Chargement de la conversation">
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-5/6" />
           </div>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
-      {selectedId && threadError && !selected ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Erreur de conversation"
-            className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-lg sm:rounded-card`}
-          >
-            <p className="text-sm text-danger" role="alert">
-              {threadError}
-            </p>
-          </div>
-        </div>
-      ) : null}
+      <Dialog
+        open={Boolean(selectedId && threadError && !selected)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeThread();
+          }
+        }}
+      >
+        <DialogContent title="Conversation">
+          <p className="text-sm text-danger" role="alert">
+            {threadError}
+          </p>
+          <Button className="mt-4" variant="secondary" onClick={closeThread}>
+            Fermer
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {selected && !threadLoading ? (
         <ThreadPanel

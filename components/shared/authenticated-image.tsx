@@ -3,8 +3,10 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useId, useState } from "react";
 
+import { IconButton } from "@/components/ui/icon-button";
 import { fetchImageBlob, isDeletedImageError } from "@/lib/images-api";
-import { btnSecondary, cardClass } from "@/lib/ui";
+import { cardClass } from "@/lib/ui";
+import { X } from "lucide-react";
 
 export function AuthenticatedImage({
   imageId,
@@ -131,7 +133,7 @@ export function ImagePreviewDialog({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-70 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-preview flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
@@ -142,9 +144,9 @@ export function ImagePreviewDialog({
           <h3 id={titleId} className="font-display text-lg font-bold">
             Preuve de paiement
           </h3>
-          <button type="button" onClick={onClose} className={btnSecondary}>
-            Fermer
-          </button>
+          <IconButton label="Fermer" onClick={onClose}>
+            <X className="size-5" aria-hidden="true" />
+          </IconButton>
         </div>
         <div className="mt-4">
           <AuthenticatedImage

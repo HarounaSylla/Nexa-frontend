@@ -1,6 +1,7 @@
 import type {
   InputHTMLAttributes,
   ReactNode,
+  Ref,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
@@ -52,11 +53,15 @@ export function Input({
 
 export function Textarea({
   className,
+  ref,
   ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  ref?: Ref<HTMLTextAreaElement>;
+}) {
   return (
     <textarea
-      className={cn(inputClass, "h-auto min-h-24 w-full min-w-0 py-2", className)}
+      ref={ref}
+      className={cn(inputClass, "h-auto w-full min-w-0 py-2", className)}
       {...props}
     />
   );

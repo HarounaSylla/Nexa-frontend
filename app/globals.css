@@ -32,6 +32,7 @@
   --z-index-nav: 30;
   --z-index-overlay: 40;
   --z-index-dialog: 50;
+  --z-index-preview: 70;
   --z-index-toast: 60;
 }
 

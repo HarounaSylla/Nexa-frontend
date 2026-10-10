@@ -6,11 +6,13 @@ import { emptyStateClass } from "@/lib/ui";
 export function EmptyState({
   icon,
   title,
+  description,
   action,
   className,
 }: {
   icon?: ReactNode;
   title: string;
+  description?: string;
   action?: ReactNode;
   className?: string;
 }) {
@@ -22,6 +24,9 @@ export function EmptyState({
         </div>
       ) : null}
       <p className="font-medium text-zinc-800">{title}</p>
+      {description ? (
+        <p className="mt-1 text-sm text-zinc-500">{description}</p>
+      ) : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   );

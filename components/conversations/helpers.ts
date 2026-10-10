@@ -72,3 +72,66 @@ export function formatDate(value: string): string {
     timeStyle: "short",
   });
 }
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+export function dayKey(value: string): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+export function formatListTime(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const today = startOfDay(new Date());
+  const day = startOfDay(date);
+  const diffDays = Math.round((today - day) / 86_400_000);
+  if (diffDays === 0) {
+    return date.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  if (diffDays === 1) {
+    return "hier";
+  }
+  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+export function formatThreadDay(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const today = startOfDay(new Date());
+  const day = startOfDay(date);
+  const diffDays = Math.round((today - day) / 86_400_000);
+  if (diffDays === 0) {
+    return "Aujourd'hui";
+  }
+  if (diffDays === 1) {
+    return "Hier";
+  }
+  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+}
+
+export function formatBubbleTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

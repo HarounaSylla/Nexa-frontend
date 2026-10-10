@@ -26,10 +26,10 @@ export function StatTile({
 }) {
   return (
     <div className={cn(cardClass, "p-4", className)}>
-      <p className="flex items-center gap-2 text-sm font-medium text-zinc-500">
+      <p className="flex items-start gap-2 text-sm font-medium text-zinc-500">
         <span
           aria-hidden="true"
-          className={cn("size-[7px] shrink-0 rounded-full", DOT[tone])}
+          className={cn("mt-[0.45em] size-[7px] shrink-0 rounded-full", DOT[tone])}
         />
         {label}
       </p>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { PageHeader } from "@/components/ui/page-header";
+import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/orders/badges";
 import { formatMoney } from "@/components/orders/order-helpers";
 import {
@@ -81,30 +82,38 @@ export function DashboardView({
       />
 
       <ul className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="Commandes à traiter"
-          value={createdCount}
-          context={"Statut « Créée », en attente d'un livreur"}
-          dot="warning"
-        />
-        <StatTile
-          label="Livraisons en cours"
-          value={inProgressCount}
-          context="Livreur assigné, pas encore confirmées"
-          dot="info"
-        />
-        <StatTile
-          label="Conversations escaladées"
-          value={escalatedCount}
-          context={"En attente d'une réponse de votre part"}
-          dot="danger"
-        />
-        <StatTile
-          label="Produits en rupture"
-          value={outOfStockCount}
-          context={`Sur ${products.length} produits au catalogue`}
-          dot={outOfStockCount > 0 ? "danger" : "success"}
-        />
+        <li>
+          <StatTile
+            label="Commandes à traiter"
+            value={createdCount}
+            context={"Statut « Créée », en attente d'un livreur"}
+            tone="warning"
+          />
+        </li>
+        <li>
+          <StatTile
+            label="Livraisons en cours"
+            value={inProgressCount}
+            context="Livreur assigné, pas encore confirmées"
+            tone="info"
+          />
+        </li>
+        <li>
+          <StatTile
+            label="Conversations escaladées"
+            value={escalatedCount}
+            context={"En attente d'une réponse de votre part"}
+            tone="danger"
+          />
+        </li>
+        <li>
+          <StatTile
+            label="Produits en rupture"
+            value={outOfStockCount}
+            context={`Sur ${products.length} produits au catalogue`}
+            tone={outOfStockCount > 0 ? "danger" : "success"}
+          />
+        </li>
       </ul>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -201,37 +210,5 @@ export function DashboardView({
         </section>
       </div>
     </div>
-  );
-}
-
-function StatTile({
-  label,
-  value,
-  context,
-  dot,
-}: {
-  label: string;
-  value: number;
-  context: string;
-  dot: "warning" | "info" | "danger" | "success";
-}) {
-  const dotClass = {
-    warning: "bg-warning",
-    info: "bg-info",
-    danger: "bg-danger",
-    success: "bg-success",
-  }[dot];
-
-  return (
-    <li className={`${cardClass} p-4`}>
-      <p className="flex items-center gap-2 text-sm font-medium text-zinc-500">
-        <span aria-hidden="true" className={`size-[7px] shrink-0 rounded-full ${dotClass}`} />
-        {label}
-      </p>
-      <p className="mt-2 font-display text-3xl font-extrabold tabular-nums text-zinc-900">
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-zinc-500">{context}</p>
-    </li>
   );
 }

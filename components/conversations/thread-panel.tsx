@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AlertTriangle, ChevronDown } from "lucide-react";
 import {
   useEffect,
   useId,
@@ -8,32 +8,27 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 
 import type {
   ConversationListItem,
   ConversationMessage,
-  MessageImage,
-  QuotedMessage,
-  QuotedMessageKind,
 } from "@/lib/conversations-api";
-import {
-  AuthenticatedImage,
-  ImagePreviewDialog,
-} from "@/components/shared/authenticated-image";
-import { PaymentStatusBadge } from "@/components/orders/badges";
-import { formatEnum, formatMoney } from "@/components/orders/order-helpers";
-import { btnPrimary, btnSecondary, cardClass, inputClass } from "@/lib/ui";
+import { ImagePreviewDialog } from "@/components/shared/authenticated-image";
+import { cn } from "@/lib/cn";
 
+import { DateSeparator } from "./date-separator";
 import {
+  dayKey,
   escalationReason,
-  formatDate,
-  isClosed,
-  isEscalated,
+  formatThreadDay,
   isEscalationNote,
-  roleLabel,
 } from "./helpers";
-import { ConversationStatusBadge } from "./status-badge";
+import { MessageBubble, threadMessageDomId } from "./message-bubble";
+import { quotedForDisplay } from "./quoted-reply-block";
+import { ThreadComposer } from "./thread-composer";
+import { ThreadHeader } from "./thread-header";
 
 export function ThreadPanel({
   conversation,
@@ -189,6 +184,72 @@ export function ThreadPanel({
     void sendDraft();
   }
 
+  const threadItems: ReactNode[] = [];
+  {
+    let lastDay: string | null = null;
+    let lastRole: string | null = null;
+    for (const message of messages) {
+      const day = dayKey(message.created_at);
+      if (day && day !== lastDay) {
+        threadItems.push(
+          <DateSeparator
+            key={`day-${day}`}
+            label={formatThreadDay(message.created_at)}
+          />,
+        );
+        lastDay = day;
+        lastRole = null;
+      }
+
+      if (isEscalationNote(message)) {
+        threadItems.push(
+          <li
+            id={threadMessageDomId(message.id)}
+            key={message.id}
+            className="flex justify-center py-1"
+          >
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-warning-soft px-3 py-1 text-xs font-medium text-warning">
+              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+              Escaladé : {escalationReason(message.display_text)}
+            </span>
+          </li>,
+        );
+        lastRole = null;
+        continue;
+      }
+
+      const quoted =
+        message.turn_role === "customer"
+          ? quotedForDisplay(message.quoted)
+          : null;
+      const quotedTargetId = quoted?.message_id ?? null;
+      const canJump =
+        quotedTargetId !== null && loadedMessageIds.has(quotedTargetId);
+      const showRole = lastRole !== message.turn_role;
+      const tight = lastRole === message.turn_role;
+
+      threadItems.push(
+        <MessageBubble
+          key={message.id}
+          message={message}
+          showRole={showRole}
+          tight={tight}
+          highlighted={highlightedMessageId === message.id}
+          quoted={quoted}
+          canJumpToQuoted={canJump}
+          onJumpToQuoted={() => {
+            if (quotedTargetId) {
+              scrollToQuotedMessage(quotedTargetId);
+            }
+          }}
+          onPreviewImage={setPreviewImageId}
+          orders={linkedOrders}
+        />,
+      );
+      lastRole = message.turn_role;
+    }
+  }
+
   function onDraftKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter") {
       return;
@@ -207,151 +268,38 @@ export function ThreadPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-dialog flex items-stretch justify-center bg-transparent sm:items-center sm:bg-black/40 sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`${cardClass} flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl sm:max-w-lg sm:rounded-card`}
+        className="flex h-dvh w-full flex-col overflow-hidden bg-white sm:h-[85dvh] sm:max-w-2xl sm:rounded-card sm:border sm:border-zinc-200/80 sm:shadow-card"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 p-5">
-          <div>
-            <h2 id={titleId} className="font-display text-lg font-bold">
-              {conversation.customer_phone}
-            </h2>
-            <div className="mt-2">
-              <ConversationStatusBadge status={conversation.status} />
-              {isClosed(conversation.status) ? (
-                <p className="mt-1 text-xs text-zinc-500">
-                  Conversation fermée — si le client écrit à nouveau, un nouveau fil sera
-                  créé automatiquement.
-                </p>
-              ) : null}
-              {linkedOrders.length > 0 ? (
-                <div className="mt-3">
-                  <p className="text-xs text-zinc-500">Commandes liées :</p>
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    {linkedOrders.map((order) => (
-                      <Link
-                        key={order.id}
-                        href={`/commandes?order=${order.id}`}
-                        className="inline-flex flex-wrap items-center gap-1.5 rounded-control border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-800"
-                      >
-                        #{order.order_number} · {formatEnum(order.status)}
-                        {order.status !== "cancelled" ? (
-                          <PaymentStatusBadge status={order.payment_status} />
-                        ) : null}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className={btnSecondary}>
-            Fermer
-          </button>
-        </div>
+        <ThreadHeader
+          conversation={conversation}
+          titleId={titleId}
+          onClose={onClose}
+        />
 
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col bg-background">
           <ul
             ref={scrollerRef}
             onScroll={onThreadScroll}
-            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4"
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 sm:px-5"
           >
-          {messages.map((message) => {
-            if (isEscalationNote(message)) {
-              return (
-                <li
-                  id={threadMessageDomId(message.id)}
-                  key={message.id}
-                  className="px-4 py-1 text-center"
-                >
-                  <p className="text-xs font-medium text-warning">
-                    Escaladé : {escalationReason(message.display_text)}
-                  </p>
-                </li>
-              );
-            }
-            const role = message.turn_role;
-            const align =
-              role === "customer"
-                ? "items-start"
-                : role === "merchant"
-                  ? "items-end"
-                  : "items-start";
-            const bubble =
-              role === "customer"
-                ? "bg-accent-soft text-accent-text"
-                : role === "merchant"
-                  ? "bg-accent text-white"
-                  : "bg-info-soft text-info";
-            const quoted =
-              role === "customer" ? quotedForDisplay(message.quoted) : null;
-            const quotedTargetId = quoted?.message_id ?? null;
-            const canJumpToQuoted =
-              quotedTargetId !== null && loadedMessageIds.has(quotedTargetId);
-            return (
-              <li
-                id={threadMessageDomId(message.id)}
-                key={message.id}
-                className={`flex flex-col ${align}`}
-              >
-                <p className="mb-1 text-xs text-zinc-500">
-                  {roleLabel(role)} · {formatDate(message.created_at)}
-                </p>
-                <div
-                  className={`max-w-[85%] rounded-control px-3 py-2 text-sm ${quoted ? "min-w-0" : ""} ${bubble} ${
-                    highlightedMessageId === message.id
-                      ? "ring-2 ring-warning ring-offset-2 ring-offset-white"
-                      : ""
-                  } motion-safe:transition-shadow motion-safe:duration-500`}
-                >
-                  {quoted ? (
-                    <QuotedReplyBlock
-                      quoted={quoted}
-                      canJump={canJumpToQuoted}
-                      onJump={() => {
-                        if (quotedTargetId) {
-                          scrollToQuotedMessage(quotedTargetId);
-                        }
-                      }}
-                    />
-                  ) : null}
-                  {message.image ? (
-                    <div className="flex flex-col gap-2">
-                      <AuthenticatedImage
-                        imageId={message.image.id}
-                        alt={message.display_text || "Photo"}
-                        className="max-h-60 min-h-24 max-w-[240px] rounded-control bg-zinc-100 object-contain"
-                        deleted={Boolean(message.image.deleted)}
-                        onClick={
-                          message.image.deleted
-                            ? undefined
-                            : () => setPreviewImageId(message.image!.id)
-                        }
-                      />
-                      <p>{message.display_text || "Photo"}</p>
-                      <ImageTag
-                        image={message.image}
-                        orders={linkedOrders}
-                      />
-                    </div>
-                  ) : (
-                    message.display_text
-                  )}
-                </div>
-              </li>
-            );
-          })}
+            {threadItems}
           </ul>
           {showNewMessages ? (
             <button
               type="button"
               aria-label="Nouveaux messages"
               onClick={scrollToLatest}
-              className={`${btnSecondary} absolute bottom-3 left-1/2 z-10 h-10 -translate-x-1/2 shadow-card`}
+              className={cn(
+                "absolute bottom-3 left-1/2 z-10 inline-flex h-10 -translate-x-1/2 items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-800 shadow-card",
+                "motion-safe:transition-colors motion-safe:duration-150",
+              )}
             >
+              <ChevronDown className="size-4" aria-hidden="true" />
               Nouveaux messages
             </button>
           ) : null}
@@ -360,45 +308,17 @@ export function ThreadPanel({
           </div>
         </div>
 
-        {error ? (
-          <p className="px-5 text-sm text-danger" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        <form
-          className="flex flex-col gap-2 border-t border-zinc-100 p-5"
+        <ThreadComposer
+          replyId={replyId}
+          draft={draft}
+          pending={pending}
+          error={error}
+          status={conversation.status}
+          onDraftChange={setDraft}
+          onDraftKeyDown={onDraftKeyDown}
           onSubmit={submitReply}
-        >
-          {isEscalated(conversation.status) ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={onReturnToAgent}
-              className={btnSecondary}
-            >
-              Renvoyer à l&apos;agent
-            </button>
-          ) : null}
-          <label htmlFor={replyId} className="sr-only">
-            Réponse
-          </label>
-          <textarea
-            id={replyId}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={onDraftKeyDown}
-            placeholder="Écrivez votre réponse…"
-            rows={3}
-            className={`${inputClass} h-auto py-2`}
-          />
-          <p className="hidden text-sm text-zinc-500 pointer-fine:block">
-            Entrée pour envoyer · Maj+Entrée pour un saut de ligne
-          </p>
-          <button type="submit" disabled={pending} className={btnPrimary}>
-            {pending ? "Envoi…" : "Envoyer"}
-          </button>
-        </form>
+          onReturnToAgent={onReturnToAgent}
+        />
       </div>
       {previewImageId ? (
         <ImagePreviewDialog
@@ -408,181 +328,4 @@ export function ThreadPanel({
       ) : null}
     </div>
   );
-}
-
-function threadMessageDomId(messageId: string): string {
-  return `thread-msg-${messageId}`;
-}
-
-const QUOTED_KINDS = new Set<QuotedMessageKind>([
-  "shop_text",
-  "shop_photo",
-  "customer_text",
-  "customer_photo",
-]);
-
-function quotedForDisplay(
-  quoted: ConversationMessage["quoted"],
-): QuotedMessage | null {
-  if (!quoted || typeof quoted !== "object") {
-    return null;
-  }
-  if (!QUOTED_KINDS.has(quoted.kind)) {
-    return null;
-  }
-  return {
-    kind: quoted.kind,
-    excerpt: quoted.excerpt ?? null,
-    product_name: quoted.product_name ?? null,
-    from_earlier_conversation: Boolean(quoted.from_earlier_conversation),
-    message_id: quoted.message_id ?? null,
-  };
-}
-
-function quotedTargetLabel(kind: QuotedMessageKind): string {
-  if (kind === "shop_text") {
-    return "la boutique";
-  }
-  if (kind === "shop_photo") {
-    return "la photo de la boutique";
-  }
-  if (kind === "customer_text") {
-    return "son propre message";
-  }
-  return "sa propre photo";
-}
-
-function quotedBodyText(quoted: QuotedMessage): string | null {
-  const isPhoto =
-    quoted.kind === "shop_photo" || quoted.kind === "customer_photo";
-  if (isPhoto) {
-    const productName = quoted.product_name?.trim();
-    return productName ? `Photo : ${productName}` : "Photo";
-  }
-  const excerpt = quoted.excerpt?.trim();
-  return excerpt || null;
-}
-
-function QuotedReplyBlock({
-  quoted,
-  canJump,
-  onJump,
-}: {
-  quoted: QuotedMessage;
-  canJump: boolean;
-  onJump: () => void;
-}) {
-  const target = quotedTargetLabel(quoted.kind);
-  const heading = `En réponse à ${target}`;
-  const body = quotedBodyText(quoted);
-  const content = (
-    <>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        <p className="min-w-0 text-[11px] font-medium text-zinc-600">{heading}</p>
-        {quoted.from_earlier_conversation ? (
-          <span className="shrink-0 rounded-full bg-zinc-200/90 px-1.5 py-px text-[10px] font-medium text-zinc-600">
-            conversation précédente
-          </span>
-        ) : null}
-      </div>
-      {body ? (
-        <p className="mt-0.5 line-clamp-2 min-w-0 wrap-break-word text-xs text-zinc-700">
-          {body}
-        </p>
-      ) : null}
-    </>
-  );
-
-  const blockClass =
-    "mb-2 w-full min-w-0 overflow-hidden rounded-md border-l-[3px] border-accent bg-white/75 px-2 py-1.5 text-left";
-
-  if (canJump) {
-    return (
-      <button
-        type="button"
-        onClick={onJump}
-        aria-label={`Aller au message cité — ${heading}`}
-        className={`${blockClass} cursor-pointer hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return <div className={blockClass}>{content}</div>;
-}
-
-function ImageTag({
-  image,
-  orders,
-}: {
-  image: MessageImage;
-  orders: ConversationListItem["orders"];
-}) {
-  const amount =
-    image.detected_amount != null && image.detected_amount !== "" ? (
-      <span> Montant lu : {formatMoney(image.detected_amount)} (à vérifier)</span>
-    ) : null;
-
-  if (image.classification === "payment_proof" && image.order_id) {
-    const matched = orders.find((order) => order.id === image.order_id);
-    if (matched) {
-      return (
-        <p className="text-xs">
-          <Link
-            href={`/commandes?order=${matched.id}`}
-            className="underline"
-          >
-            Preuve de paiement probable · commande #{matched.order_number}
-          </Link>
-          {amount}
-        </p>
-      );
-    }
-    return (
-      <p className="text-xs text-warning">
-        Preuve de paiement probable · commande à identifier. Ouvrez la
-        commande concernée pour vérifier.
-        {amount}
-      </p>
-    );
-  }
-
-  if (image.classification === "payment_proof") {
-    return (
-      <p className="text-xs text-warning">
-        Preuve de paiement probable · commande à identifier. Ouvrez la
-        commande concernée pour vérifier.
-        {amount}
-      </p>
-    );
-  }
-
-  if (image.classification === "unknown") {
-    return (
-      <p className="text-xs">
-        Image non analysée
-        {amount}
-      </p>
-    );
-  }
-
-  if (image.classification === "product_photo") {
-    const name = (image.matched_product_name ?? "").trim();
-    if (image.match_kind === "exact" && name) {
-      return <p className="text-xs">Produit reconnu : {name}</p>;
-    }
-    if (image.match_kind === "similar" && name) {
-      return (
-        <p className="text-xs">
-          Produit proche : {name} (pas exactement le même modèle)
-        </p>
-      );
-    }
-    return (
-      <p className="text-xs text-warning">Photo de produit non reconnue</p>
-    );
-  }
-
-  return null;
 }
