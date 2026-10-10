@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useState } from "react";
 
+import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/orders/badges";
 import { formatMoney } from "@/components/orders/order-helpers";
 import {
@@ -24,7 +25,6 @@ import {
   cardInteractiveClass,
   emptyStateClass,
   formatDashboardDate,
-  pageTitleClass,
   sectionTitleClass,
 } from "@/lib/ui";
 
@@ -75,10 +75,10 @@ export function DashboardView({
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <h1 className={pageTitleClass}>Bon retour, {shopName}</h1>
-      <p className="mt-1 text-sm text-zinc-500">
-        {`Voici ce qui compte aujourd'hui, ${formatDashboardDate()}.`}
-      </p>
+      <PageHeader
+        title={`Bon retour, ${shopName}`}
+        subtitle={`Voici ce qui compte aujourd'hui, ${formatDashboardDate()}.`}
+      />
 
       <ul className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile

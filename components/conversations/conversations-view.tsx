@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { PageHeader } from "@/components/ui/page-header";
 import { errorMessage } from "@/lib/api";
 import { displayWhatsAppError } from "@/lib/whatsapp-errors";
 import {
@@ -21,7 +22,6 @@ import {
   cardInteractiveClass,
   emptyStateClass,
   inputClass,
-  pageTitleClass,
 } from "@/lib/ui";
 
 import {
@@ -307,7 +307,7 @@ export function ConversationsView({
   if (listError) {
     return (
       <div className="mx-auto w-full max-w-5xl">
-        <h1 className={pageTitleClass}>Conversations</h1>
+        <PageHeader title="Conversations" />
         <p className="mt-6 text-sm text-danger" role="alert">
           {listError}
         </p>
@@ -317,12 +317,14 @@ export function ConversationsView({
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <h1 className={pageTitleClass}>Conversations</h1>
-      <p className="mt-2 text-sm text-zinc-500">
-        {filtersActive
-          ? `${visibleConversations.length} sur ${conversations.length} conversation${conversations.length === 1 ? "" : "s"}`
-          : `${conversations.length} conversation${conversations.length === 1 ? "" : "s"}`}
-      </p>
+      <PageHeader
+        title="Conversations"
+        subtitle={
+          filtersActive
+            ? `${visibleConversations.length} sur ${conversations.length} conversation${conversations.length === 1 ? "" : "s"}`
+            : `${conversations.length} conversation${conversations.length === 1 ? "" : "s"}`
+        }
+      />
 
       {conversations.length === 0 ? (
         <div className={`mt-8 ${emptyStateClass}`}>

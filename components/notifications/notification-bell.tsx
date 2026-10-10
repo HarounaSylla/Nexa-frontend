@@ -4,7 +4,9 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { BellIcon } from "@/components/icons";
+import { Bell } from "lucide-react";
+
+import { IconButton } from "@/components/ui/icon-button";
 import { errorMessage } from "@/lib/api";
 import {
   listNotifications,
@@ -159,26 +161,25 @@ export function NotificationBell() {
 
   return (
     <div ref={rootRef} className="relative">
-      <button
-        type="button"
+      <IconButton
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={
+        label={
           unread > 0
             ? `Notifications, ${unread} non lues`
             : "Notifications"
         }
         onClick={togglePanel}
-        className="relative inline-flex size-10 items-center justify-center rounded-full text-zinc-700 hover:bg-accent-soft"
+        className="relative"
       >
-        <BellIcon className="size-5" />
+        <Bell className="size-5" strokeWidth={1.75} aria-hidden="true" />
         {unread > 0 ? (
-          <span className="absolute top-1 right-1 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 text-white">
+          <span className="absolute top-1 right-1 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-4 text-white tabular-nums">
             {badgeLabel}
           </span>
         ) : null}
-      </button>
+      </IconButton>
       {open ? (
         <div
           id={panelId}

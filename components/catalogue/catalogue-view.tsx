@@ -6,6 +6,7 @@ import { useState } from "react";
 import { CategoriesPanel } from "@/components/catalogue/categories-panel";
 import { ProductsPanel } from "@/components/catalogue/products-panel";
 import { PageTabs } from "@/components/page-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 import { errorMessage } from "@/lib/api";
 import {
   type CatalogueCategory,
@@ -14,7 +15,6 @@ import {
   listProducts,
 } from "@/lib/catalogue-api";
 import { CATALOGUE_TABS } from "@/lib/nav";
-import { pageTitleClass } from "@/lib/ui";
 
 export function CatalogueView({
   initialProducts,
@@ -54,7 +54,7 @@ export function CatalogueView({
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <h1 className={pageTitleClass}>Catalogue</h1>
+      <PageHeader title="Catalogue" />
       <PageTabs
         label="Sections du catalogue"
         tabs={CATALOGUE_TABS}

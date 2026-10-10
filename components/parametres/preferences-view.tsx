@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useState } from "react";
 
 import { PageTabs } from "@/components/page-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 import { errorMessage } from "@/lib/api";
 import { PARAMETRES_TABS } from "@/lib/nav";
 import { listDeliveryZones, type DeliveryZone } from "@/lib/orders-api";
@@ -15,7 +16,6 @@ import {
 import {
   bannerErrorClass,
   btnSecondary,
-  pageTitleClass,
 } from "@/lib/ui";
 
 import { DeliveryZonesCard } from "./delivery-zones-card";
@@ -71,7 +71,7 @@ export function PreferencesView({
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <h1 className={pageTitleClass}>Paramètres</h1>
+      <PageHeader title="Paramètres" />
       <PageTabs
         label="Sections des paramètres"
         tabs={PARAMETRES_TABS}

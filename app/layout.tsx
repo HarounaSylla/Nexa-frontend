@@ -1,6 +1,8 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, Manrope } from "next/font/google";
+
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -29,6 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col font-sans">
         <ClerkProvider>
           {children}
+          <ToastProvider />
         </ClerkProvider>
       </body>
     </html>

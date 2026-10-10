@@ -1,12 +1,12 @@
-import { pageTitleClass } from "@/lib/ui";
+import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Loading() {
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <h1 className={pageTitleClass}>Conversations</h1>
-      <p className="mt-6 text-sm text-zinc-500">
-        Chargement des conversations…
-      </p>
+    <div>
+      <PageHeader title="Conversations" />
+      <Skeleton className="mt-6 h-24 w-full" />
+      <Skeleton className="mt-3 h-24 w-full" />
     </div>
   );
 }

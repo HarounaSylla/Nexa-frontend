@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { PageHeader } from "@/components/ui/page-header";
 import { errorMessage } from "@/lib/api";
 import { displayWhatsAppError } from "@/lib/whatsapp-errors";
 import {
@@ -28,7 +29,6 @@ import {
   cardInteractiveClass,
   emptyStateClass,
   inputClass,
-  pageTitleClass,
 } from "@/lib/ui";
 
 import { PaymentStatusBadge, StatusBadge } from "./badges";
@@ -250,7 +250,7 @@ export function OrdersView({
   if (listError) {
     return (
       <div className="mx-auto w-full max-w-5xl">
-        <h1 className={pageTitleClass}>Commandes</h1>
+        <PageHeader title="Commandes" />
         <p className={`mt-6 ${bannerErrorClass}`} role="alert">
           {listError}
         </p>
@@ -260,10 +260,14 @@ export function OrdersView({
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <h1 className={pageTitleClass}>Commandes</h1>
-      <p className="mt-2 text-sm text-zinc-500 tabular-nums">
-        {orders.length} commande{orders.length === 1 ? "" : "s"}
-      </p>
+      <PageHeader
+        title="Commandes"
+        subtitle={
+          <span className="tabular-nums">
+            {orders.length} commande{orders.length === 1 ? "" : "s"}
+          </span>
+        }
+      />
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <label className="flex max-w-xs flex-col gap-1 text-sm font-medium">
