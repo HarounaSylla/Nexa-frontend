@@ -29,12 +29,27 @@ export type MessageImage = {
   match_kind?: "exact" | "similar" | null;
 };
 
+export type QuotedMessageKind =
+  | "shop_text"
+  | "shop_photo"
+  | "customer_text"
+  | "customer_photo";
+
+export type QuotedMessage = {
+  kind: QuotedMessageKind;
+  excerpt: string | null;
+  product_name: string | null;
+  from_earlier_conversation: boolean;
+  message_id: string | null;
+};
+
 export type ConversationMessage = {
   id: string;
   turn_role: string;
   display_text: string;
   created_at: string;
   image: MessageImage | null;
+  quoted?: QuotedMessage | null;
 };
 
 export type ConversationStatus = {

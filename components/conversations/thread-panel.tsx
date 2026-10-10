@@ -14,6 +14,8 @@ import type {
   ConversationListItem,
   ConversationMessage,
   MessageImage,
+  QuotedMessage,
+  QuotedMessageKind,
 } from "@/lib/conversations-api";
 import {
   AuthenticatedImage,
@@ -56,10 +58,23 @@ export function ThreadPanel({
   const [previewImageId, setPreviewImageId] = useState<string | null>(null);
   const [showNewMessages, setShowNewMessages] = useState(false);
   const [liveTick, setLiveTick] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
+    null,
+  );
   const scrollerRef = useRef<HTMLUListElement>(null);
   const nearBottomRef = useRef(true);
   const prevMessagesRef = useRef<ConversationMessage[] | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
   const linkedOrders = conversation.orders ?? [];
+  const loadedMessageIds = new Set(messages.map((message) => message.id));
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -132,6 +147,30 @@ export function ThreadPanel({
     scroller.scrollTo({ top: scroller.scrollHeight });
     nearBottomRef.current = true;
     setShowNewMessages(false);
+  }
+
+  function scrollToQuotedMessage(messageId: string) {
+    const target = document.getElementById(threadMessageDomId(messageId));
+    if (!target) {
+      return;
+    }
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    target.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    setHighlightedMessageId(messageId);
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedMessageId((current) =>
+        current === messageId ? null : current,
+      );
+      highlightTimerRef.current = null;
+    }, 1600);
   }
 
   async function sendDraft() {
@@ -223,7 +262,11 @@ export function ThreadPanel({
           {messages.map((message) => {
             if (isEscalationNote(message)) {
               return (
-                <li key={message.id} className="px-4 py-1 text-center">
+                <li
+                  id={threadMessageDomId(message.id)}
+                  key={message.id}
+                  className="px-4 py-1 text-center"
+                >
                   <p className="text-xs font-medium text-warning">
                     Escaladé : {escalationReason(message.display_text)}
                   </p>
@@ -243,14 +286,38 @@ export function ThreadPanel({
                 : role === "merchant"
                   ? "bg-accent text-white"
                   : "bg-info-soft text-info";
+            const quoted =
+              role === "customer" ? quotedForDisplay(message.quoted) : null;
+            const quotedTargetId = quoted?.message_id ?? null;
+            const canJumpToQuoted =
+              quotedTargetId !== null && loadedMessageIds.has(quotedTargetId);
             return (
-              <li key={message.id} className={`flex flex-col ${align}`}>
+              <li
+                id={threadMessageDomId(message.id)}
+                key={message.id}
+                className={`flex flex-col ${align}`}
+              >
                 <p className="mb-1 text-xs text-zinc-500">
                   {roleLabel(role)} · {formatDate(message.created_at)}
                 </p>
                 <div
-                  className={`max-w-[85%] rounded-control px-3 py-2 text-sm ${bubble}`}
+                  className={`max-w-[85%] rounded-control px-3 py-2 text-sm ${quoted ? "min-w-0" : ""} ${bubble} ${
+                    highlightedMessageId === message.id
+                      ? "ring-2 ring-warning ring-offset-2 ring-offset-white"
+                      : ""
+                  } motion-safe:transition-shadow motion-safe:duration-500`}
                 >
+                  {quoted ? (
+                    <QuotedReplyBlock
+                      quoted={quoted}
+                      canJump={canJumpToQuoted}
+                      onJump={() => {
+                        if (quotedTargetId) {
+                          scrollToQuotedMessage(quotedTargetId);
+                        }
+                      }}
+                    />
+                  ) : null}
                   {message.image ? (
                     <div className="flex flex-col gap-2">
                       <AuthenticatedImage
@@ -341,6 +408,108 @@ export function ThreadPanel({
       ) : null}
     </div>
   );
+}
+
+function threadMessageDomId(messageId: string): string {
+  return `thread-msg-${messageId}`;
+}
+
+const QUOTED_KINDS = new Set<QuotedMessageKind>([
+  "shop_text",
+  "shop_photo",
+  "customer_text",
+  "customer_photo",
+]);
+
+function quotedForDisplay(
+  quoted: ConversationMessage["quoted"],
+): QuotedMessage | null {
+  if (!quoted || typeof quoted !== "object") {
+    return null;
+  }
+  if (!QUOTED_KINDS.has(quoted.kind)) {
+    return null;
+  }
+  return {
+    kind: quoted.kind,
+    excerpt: quoted.excerpt ?? null,
+    product_name: quoted.product_name ?? null,
+    from_earlier_conversation: Boolean(quoted.from_earlier_conversation),
+    message_id: quoted.message_id ?? null,
+  };
+}
+
+function quotedTargetLabel(kind: QuotedMessageKind): string {
+  if (kind === "shop_text") {
+    return "la boutique";
+  }
+  if (kind === "shop_photo") {
+    return "la photo de la boutique";
+  }
+  if (kind === "customer_text") {
+    return "son propre message";
+  }
+  return "sa propre photo";
+}
+
+function quotedBodyText(quoted: QuotedMessage): string | null {
+  const isPhoto =
+    quoted.kind === "shop_photo" || quoted.kind === "customer_photo";
+  if (isPhoto) {
+    const productName = quoted.product_name?.trim();
+    return productName ? `Photo : ${productName}` : "Photo";
+  }
+  const excerpt = quoted.excerpt?.trim();
+  return excerpt || null;
+}
+
+function QuotedReplyBlock({
+  quoted,
+  canJump,
+  onJump,
+}: {
+  quoted: QuotedMessage;
+  canJump: boolean;
+  onJump: () => void;
+}) {
+  const target = quotedTargetLabel(quoted.kind);
+  const heading = `En réponse à ${target}`;
+  const body = quotedBodyText(quoted);
+  const content = (
+    <>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <p className="min-w-0 text-[11px] font-medium text-zinc-600">{heading}</p>
+        {quoted.from_earlier_conversation ? (
+          <span className="shrink-0 rounded-full bg-zinc-200/90 px-1.5 py-px text-[10px] font-medium text-zinc-600">
+            conversation précédente
+          </span>
+        ) : null}
+      </div>
+      {body ? (
+        <p className="mt-0.5 line-clamp-2 min-w-0 wrap-break-word text-xs text-zinc-700">
+          {body}
+        </p>
+      ) : null}
+    </>
+  );
+
+  const blockClass =
+    "mb-2 w-full min-w-0 overflow-hidden rounded-md border-l-[3px] border-accent bg-white/75 px-2 py-1.5 text-left";
+
+  if (canJump) {
+    return (
+      <button
+        type="button"
+        onClick={onJump}
+        aria-label={`Aller au message cité — ${heading}`}
+        className={`${blockClass} cursor-pointer hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={blockClass}>{content}</div>;
 }
 
 function ImageTag({
