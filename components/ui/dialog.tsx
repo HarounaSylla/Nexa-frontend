@@ -35,18 +35,30 @@ export function DialogContent({
   description,
   children,
   className,
+  elevated = false,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   className?: string;
+  elevated?: boolean;
 }) {
+  const zClass = elevated ? "z-preview" : "z-dialog";
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-dialog bg-black/40 motion-safe:transition-opacity" />
-      <DialogPrimitive.Content
+      <DialogPrimitive.Overlay
         className={cn(
-          "fixed inset-x-0 bottom-0 z-dialog max-h-[90dvh] overflow-y-auto rounded-t-sheet border border-zinc-200/80 bg-white p-4 shadow-card-hover sm:inset-auto sm:top-1/2 sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-card sm:p-5",
+          "fixed inset-0 bg-black/40 motion-safe:transition-opacity",
+          zClass,
+        )}
+      />
+      <DialogPrimitive.Content
+        onEscapeKeyDown={(event) => {
+          event.stopPropagation();
+        }}
+        className={cn(
+          "fixed inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-sheet border border-zinc-200/80 bg-white p-4 shadow-card-hover sm:inset-auto sm:top-1/2 sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-card sm:p-5",
+          zClass,
           "motion-safe:transition-transform motion-safe:duration-200",
           focusRingClass,
           className,

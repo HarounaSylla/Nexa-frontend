@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useRef,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -36,6 +37,13 @@ export function ThreadComposer({
   onReturnToAgent: () => Promise<void>;
 }) {
   const areaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (draft !== "" || !areaRef.current) {
+      return;
+    }
+    areaRef.current.style.height = "auto";
+  }, [draft]);
 
   function resize(element: HTMLTextAreaElement) {
     element.style.height = "auto";

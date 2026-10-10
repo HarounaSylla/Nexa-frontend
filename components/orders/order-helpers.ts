@@ -25,6 +25,57 @@ export function formatDate(value: string): string {
   });
 }
 
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+export function formatShortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const today = startOfDay(new Date());
+  const day = startOfDay(date);
+  const diffDays = Math.round((today - day) / 86_400_000);
+  if (diffDays === 0) {
+    return date.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  if (diffDays === 1) {
+    return "hier";
+  }
+  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+export function needsAttention(order: {
+  status: string;
+  payment_status: string;
+}): boolean {
+  return order.payment_status === "proof_received" || order.status === "created";
+}
+
+export function orderMatchesQuery(
+  order: { order_number: number; customer_phone: string },
+  query: string,
+): boolean {
+  const raw = query.trim().toLowerCase();
+  if (!raw) {
+    return true;
+  }
+  const digits = raw.replace(/\D/g, "");
+  const phone = order.customer_phone.toLowerCase().replace(/[\s.\-()+]/g, "");
+  const needlePhone = raw.replace(/[\s.\-()+]/g, "");
+  if (needlePhone && phone.includes(needlePhone)) {
+    return true;
+  }
+  if (digits && String(order.order_number).includes(digits)) {
+    return true;
+  }
+  return formatOrderNumber(order.order_number).toLowerCase().includes(raw);
+}
+
 const DISPLAY_LABELS: Record<string, string> = {
   created: "Créée",
   deliverer_assigned: "Livreur assigné",

@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useId, useState, type FormEvent } from "react";
+import { Plus, Trash2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage } from "@/lib/api";
 import { listProducts, type CatalogueProduct } from "@/lib/catalogue-api";
 import {
@@ -9,14 +15,7 @@ import {
   type DeliveryZone,
   listDeliveryZones,
 } from "@/lib/orders-api";
-import {
-  bannerErrorClass,
-  btnDangerGhost,
-  btnPrimary,
-  btnSecondary,
-  cardClass,
-  inputClass,
-} from "@/lib/ui";
+import { bannerErrorClass } from "@/lib/ui";
 
 import { displayOrderError, formatEnum } from "./order-helpers";
 
@@ -37,7 +36,6 @@ export function CreateOrderDialog({
   onClose: () => void;
   onCreated: (orderId: string, orderNumber: number) => Promise<void>;
 }) {
-  const titleId = useId();
   const phoneId = useId();
   const addressId = useId();
   const cityId = useId();
@@ -57,16 +55,6 @@ export function CreateOrderDialog({
   const [submitting, setSubmitting] = useState(false);
 
   const busy = pending || submitting;
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !busy) {
-        onClose();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [busy, onClose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,140 +125,139 @@ export function CreateOrderDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className={`${cardClass} max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl p-5 sm:max-w-lg sm:rounded-card`}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <h2 id={titleId} className="font-display text-lg font-bold">
-            Nouvelle commande
-          </h2>
-          <button type="button" onClick={onClose} className={btnSecondary}>
-            Fermer
-          </button>
-        </div>
-
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent title="Nouvelle commande" className="sm:max-w-lg">
         {loading ? (
-          <p className="mt-4 text-sm text-zinc-500">Chargement…</p>
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
         ) : loadError ? (
-          <p className={`mt-4 ${bannerErrorClass}`} role="alert">
+          <p className={bannerErrorClass} role="alert">
             {loadError}
           </p>
         ) : (
-          <form className="mt-4 flex flex-col gap-3" onSubmit={onSubmit}>
-            <label htmlFor={phoneId} className="flex flex-col gap-1 text-sm font-medium">
-              Téléphone du client
-              <input
+          <form className="flex flex-col gap-3" onSubmit={onSubmit}>
+            <Field label="Téléphone du client" htmlFor={phoneId}>
+              <Input
                 id={phoneId}
                 required
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
                 inputMode="tel"
                 autoComplete="tel"
-                className={inputClass}
               />
-            </label>
+            </Field>
 
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium">Articles</legend>
+              <legend className="text-sm font-medium text-zinc-800">
+                Articles
+              </legend>
               {lines.map((line, index) => (
-                <div key={line.key} className="flex flex-col gap-2 sm:flex-row">
-                  <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium">
-                    Produit
-                    <select
-                      required
-                      value={line.productId}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setLines((current) =>
-                          current.map((row) =>
-                            row.key === line.key
-                              ? { ...row, productId: value }
-                              : row,
-                          ),
-                        );
-                      }}
-                      className={inputClass}
-                    >
-                      <option value="">Choisir un produit</option>
-                      {products.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} · stock {product.stock_qty}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex w-full flex-col gap-1 text-sm font-medium sm:w-28">
-                    Quantité
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      step="1"
-                      value={line.quantity}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setLines((current) =>
-                          current.map((row) =>
-                            row.key === line.key
-                              ? { ...row, quantity: value }
-                              : row,
-                          ),
-                        );
-                      }}
-                      className={`${inputClass} tabular-nums`}
-                    />
-                  </label>
+                <div
+                  key={line.key}
+                  className="rounded-card border border-zinc-200 bg-white p-3 shadow-card"
+                >
+                  <p className="sr-only">Article {index + 1}</p>
                   {lines.length > 1 ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLines((current) =>
-                          current.filter((row) => row.key !== line.key),
-                        )
-                      }
-                      className={`${btnDangerGhost} sm:mt-6`}
-                    >
-                      Retirer
-                    </button>
+                    <div className="mb-1 flex justify-end">
+                      <IconButton
+                        label="Retirer la ligne"
+                        onClick={() =>
+                          setLines((current) =>
+                            current.filter((row) => row.key !== line.key),
+                          )
+                        }
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </IconButton>
+                    </div>
                   ) : null}
-                  <span className="sr-only">
-                    Article {index + 1}
-                  </span>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="min-w-0 flex-1">
+                      <Field label="Produit">
+                        <Select
+                          required
+                          value={line.productId}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setLines((current) =>
+                              current.map((row) =>
+                                row.key === line.key
+                                  ? { ...row, productId: value }
+                                  : row,
+                              ),
+                            );
+                          }}
+                        >
+                          <option value="">Choisir un produit</option>
+                          {products.map((product) => (
+                            <option key={product.id} value={product.id}>
+                              {product.name} · stock {product.stock_qty}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    </div>
+                    <div className="sm:w-28">
+                      <Field label="Quantité">
+                        <Input
+                          type="number"
+                          required
+                          min="1"
+                          step="1"
+                          value={line.quantity}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setLines((current) =>
+                              current.map((row) =>
+                                row.key === line.key
+                                  ? { ...row, quantity: value }
+                                  : row,
+                              ),
+                            );
+                          }}
+                          className="tabular-nums"
+                        />
+                      </Field>
+                    </div>
+                  </div>
                 </div>
               ))}
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                icon={<Plus className="size-4" />}
                 onClick={() => setLines((current) => [...current, emptyLine()])}
-                className={btnSecondary}
               >
-                Ajouter un article
-              </button>
+                Ajouter une ligne
+              </Button>
             </fieldset>
 
-            <label htmlFor={addressId} className="flex flex-col gap-1 text-sm font-medium">
-              Adresse de livraison
-              <textarea
+            <Field label="Adresse de livraison" htmlFor={addressId}>
+              <Textarea
                 id={addressId}
                 required
                 rows={2}
                 value={address}
                 onChange={(event) => setAddress(event.target.value)}
-                className={`${inputClass} h-auto py-2`}
               />
-            </label>
+            </Field>
 
-            <label htmlFor={cityId} className="flex flex-col gap-1 text-sm font-medium">
-              Ville
-              <select
+            <Field label="Ville" htmlFor={cityId}>
+              <Select
                 id={cityId}
                 required
                 value={city}
                 onChange={(event) => setCity(event.target.value)}
-                className={inputClass}
               >
                 <option value="">Choisir une ville</option>
                 {selectableZones.map((zone) => (
@@ -280,12 +267,11 @@ export function CreateOrderDialog({
                       : `${zone.city} (non desservie)`}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
 
-            <label htmlFor={paymentId} className="flex flex-col gap-1 text-sm font-medium">
-              Mode de paiement
-              <select
+            <Field label="Mode de paiement" htmlFor={paymentId}>
+              <Select
                 id={paymentId}
                 required
                 value={paymentMethod}
@@ -294,14 +280,13 @@ export function CreateOrderDialog({
                     event.target.value as "cash_on_delivery" | "online",
                   )
                 }
-                className={inputClass}
               >
                 <option value="cash_on_delivery">
                   {formatEnum("cash_on_delivery")}
                 </option>
                 <option value="online">{formatEnum("online")}</option>
-              </select>
-            </label>
+              </Select>
+            </Field>
 
             {submitError ? (
               <p className={bannerErrorClass} role="alert">
@@ -309,22 +294,24 @@ export function CreateOrderDialog({
               </p>
             ) : null}
 
-            <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onClose}
-                className={btnSecondary}
-              >
-                Annuler
-              </button>
-              <button type="submit" disabled={busy} className={btnPrimary}>
-                {busy ? "Création…" : "Créer la commande"}
-              </button>
+            <div className="sticky bottom-0 -mx-4 mt-2 border-t border-zinc-100 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={onClose}
+                >
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={busy}>
+                  {busy ? "Création…" : "Créer la commande"}
+                </Button>
+              </div>
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

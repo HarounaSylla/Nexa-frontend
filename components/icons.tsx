@@ -25,12 +25,14 @@ const NAV_ICONS: Record<NavIconName, LucideIcon> = {
 export function NavIcon({
   name,
   className,
+  strokeWidth = 1.75,
 }: {
   name: NavIconName;
   className?: string;
+  strokeWidth?: number;
 }) {
   const Icon = NAV_ICONS[name];
-  return <Icon className={className} strokeWidth={1.75} aria-hidden="true" />;
+  return <Icon className={className} strokeWidth={strokeWidth} aria-hidden="true" />;
 }
 
 export function WhatsAppIcon({ className }: IconProps) {

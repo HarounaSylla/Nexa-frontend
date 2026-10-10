@@ -87,13 +87,26 @@ export function AppShell({
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-center font-display text-[10px] leading-tight font-semibold",
+                    "flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-center font-display text-[10px] leading-tight",
                     "motion-safe:transition-colors motion-safe:duration-150",
                     focusRingClass,
-                    active ? "text-accent" : "text-zinc-500 hover:text-zinc-800",
+                    active
+                      ? "font-bold text-accent-text"
+                      : "font-semibold text-zinc-500 hover:text-zinc-800",
                   )}
                 >
-                  <NavIcon name={item.icon} className="size-5" />
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-full px-4 py-1",
+                      active && "bg-accent-soft",
+                    )}
+                  >
+                    <NavIcon
+                      name={item.icon}
+                      className="size-5"
+                      strokeWidth={active ? 2.25 : 1.75}
+                    />
+                  </span>
                   <span className="max-w-full whitespace-normal">
                     {item.shortLabel}
                   </span>

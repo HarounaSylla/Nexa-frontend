@@ -2,6 +2,7 @@ export { Avatar, ShopAvatar, ShopMark } from "@/components/ui/avatar";
 export { Badge, StatusPill, type BadgeTone } from "@/components/ui/badge";
 export { Button, buttonClassName, type ButtonProps } from "@/components/ui/button";
 export { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+export { ConfirmDialog } from "@/components/ui/confirm-dialog";
 export { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 export { EmptyState } from "@/components/ui/empty-state";
 export { Field, Input, Select, Textarea } from "@/components/ui/field";

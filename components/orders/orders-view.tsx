@@ -1,11 +1,21 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
+import { Plus, Search, ShoppingBag, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/toast";
 import { errorMessage } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { displayWhatsAppError } from "@/lib/whatsapp-errors";
 import {
   type Deliverer,
@@ -21,15 +31,7 @@ import {
   listPaymentLinks,
   type PaymentLink,
 } from "@/lib/payment-links-api";
-import {
-  bannerErrorClass,
-  btnPrimary,
-  btnSecondary,
-  cardClass,
-  cardInteractiveClass,
-  emptyStateClass,
-  inputClass,
-} from "@/lib/ui";
+import { bannerErrorClass, focusRingClass } from "@/lib/ui";
 
 import { PaymentStatusBadge, StatusBadge } from "./badges";
 import { CreateOrderDialog } from "./create-order-dialog";
@@ -37,10 +39,12 @@ import { OrderDetailPanel } from "./order-detail-panel";
 import {
   canSendPaymentLink,
   displayOrderError,
-  formatDate,
   formatEnum,
   formatMoney,
   formatOrderNumber,
+  formatShortDate,
+  needsAttention,
+  orderMatchesQuery,
   uniqueStatuses,
 } from "./order-helpers";
 
@@ -58,6 +62,7 @@ export function OrdersView({
   const [orders, setOrders] = useState(initialOrders);
   const [listError, setListError] = useState<string | null>(initialError);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [deliverers, setDeliverers] = useState<Deliverer[]>([]);
@@ -65,7 +70,6 @@ export function OrdersView({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[] | null>(null);
   const [paymentLinksError, setPaymentLinksError] = useState<string | null>(
@@ -73,7 +77,6 @@ export function OrdersView({
   );
   const [paymentLinksLoading, setPaymentLinksLoading] = useState(false);
   const openRequest = useRef(0);
-  const pendingNotice = useRef<string | null>(null);
   const paymentLinksRef = useRef<{
     links: PaymentLink[] | null;
     error: string | null;
@@ -84,12 +87,23 @@ export function OrdersView({
     statusFilter === "all" || statuses.includes(statusFilter)
       ? statusFilter
       : "all";
+  const filtersActive = query.trim() !== "" || activeFilter !== "all";
   const visibleOrders = useMemo(() => {
-    if (activeFilter === "all") {
-      return orders;
+    return orders.filter((order) => {
+      if (activeFilter !== "all" && order.status !== activeFilter) {
+        return false;
+      }
+      return orderMatchesQuery(order, query);
+    });
+  }, [activeFilter, orders, query]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: orders.length };
+    for (const status of statuses) {
+      counts[status] = orders.filter((order) => order.status === status).length;
     }
-    return orders.filter((order) => order.status === activeFilter);
-  }, [activeFilter, orders]);
+    return counts;
+  }, [orders, statuses]);
 
   useEffect(() => {
     if (orderParam) {
@@ -123,14 +137,11 @@ export function OrdersView({
 
   async function openOrder(orderId: string) {
     const requestId = ++openRequest.current;
-    const keepNotice = pendingNotice.current;
-    pendingNotice.current = null;
     setSelectedId(orderId);
     setDetail(null);
     setDetailLoading(true);
     setDetailError(null);
     setActionError(null);
-    setNotice(keepNotice);
     try {
       const token = await getToken();
       const [nextDetail, nextDeliverers] = await Promise.all([
@@ -163,7 +174,6 @@ export function OrdersView({
     setDetail(null);
     setDetailLoading(false);
     setDetailError(null);
-    setNotice(null);
     setActionError(null);
   }
 
@@ -172,6 +182,11 @@ export function OrdersView({
     if (orderParam) {
       router.push("/commandes");
     }
+  }
+
+  function resetFilters() {
+    setQuery("");
+    setStatusFilter("all");
   }
 
   async function refreshList(token: string | null) {
@@ -190,7 +205,6 @@ export function OrdersView({
     }
     setActionPending(true);
     setActionError(null);
-    setNotice(null);
     try {
       const token = await getToken();
       await action(token);
@@ -202,13 +216,13 @@ export function OrdersView({
       setDetail(nextDetail);
       setDeliverers(nextDeliverers);
       if (successNotice) {
-        setNotice(successNotice);
+        toast.success(successNotice);
       }
       return true;
     } catch (err) {
-      setActionError(
-        displayWhatsAppError(displayOrderError(errorMessage(err))),
-      );
+      const message = displayWhatsAppError(displayOrderError(errorMessage(err)));
+      setActionError(message);
+      toast.error(message);
       if (options?.refreshOnError) {
         try {
           const token = await getToken();
@@ -240,7 +254,7 @@ export function OrdersView({
     const nextDeliverers = await listDeliverers(token);
     setDeliverers(nextDeliverers);
     setActionError(null);
-    setNotice(existingId ? "Livreur modifié." : "Livreur ajouté.");
+    toast.success(existingId ? "Livreur modifié." : "Livreur ajouté.");
     if (existingId && detail?.deliverer?.id === existingId) {
       setDetail(await getOrder(token, detail.id));
     }
@@ -264,79 +278,159 @@ export function OrdersView({
         title="Commandes"
         subtitle={
           <span className="tabular-nums">
-            {orders.length} commande{orders.length === 1 ? "" : "s"}
+            {filtersActive
+              ? `${visibleOrders.length} sur ${orders.length} commande${orders.length === 1 ? "" : "s"}`
+              : `${orders.length} commande${orders.length === 1 ? "" : "s"}`}
           </span>
+        }
+        actions={
+          <Button
+            icon={<Plus className="size-4" />}
+            onClick={() => setCreating(true)}
+          >
+            Nouvelle commande
+          </Button>
         }
       />
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <label className="flex max-w-xs flex-col gap-1 text-sm font-medium">
-          Statut
-          <select
-            value={activeFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className={inputClass}
-          >
-            <option value="all">Toutes</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {formatEnum(status)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className={btnPrimary}
-        >
-          Nouvelle commande
-        </button>
-      </div>
-
       {orders.length === 0 ? (
-        <div className={`mt-8 ${emptyStateClass}`}>
-          <p className="font-medium text-zinc-800">Aucune commande pour le moment</p>
-          <p className="mt-1 text-sm">
-            Les commandes WhatsApp apparaîtront ici.
-          </p>
-        </div>
-      ) : visibleOrders.length === 0 ? (
-        <p className="mt-8 text-sm text-zinc-500">
-          Aucune commande avec ce statut.
-        </p>
+        <EmptyState
+          className="mt-8"
+          icon={<ShoppingBag className="size-5" aria-hidden="true" />}
+          title="Aucune commande pour le moment"
+          description="Les commandes WhatsApp apparaîtront ici."
+        />
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {visibleOrders.map((order) => (
-            <li key={order.id}>
-              <button
-                type="button"
-                onClick={() => router.push(`/commandes?order=${order.id}`)}
-                className={`${cardInteractiveClass} flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:justify-between`}
+        <>
+          <div className="relative mt-4">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-400"
+              aria-hidden="true"
+            />
+            <label htmlFor="order-search" className="sr-only">
+              Rechercher une commande
+            </label>
+            <Input
+              id="order-search"
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="N° de commande ou téléphone"
+              className="pr-11 pl-9"
+            />
+            {query ? (
+              <IconButton
+                label="Effacer la recherche"
+                onClick={() => setQuery("")}
+                className="absolute top-1/2 right-0.5 size-10 -translate-y-1/2"
               >
-                <div className="min-w-0">
-                  <p className="font-medium tabular-nums">
-                    {formatOrderNumber(order.order_number)}
-                  </p>
-                  <p className="text-sm text-zinc-500 tabular-nums">
-                    {order.customer_phone} · {order.city ?? "Pas de ville"} ·{" "}
-                    {order.item_count} article
-                    {order.item_count === 1 ? "" : "s"} · {formatMoney(order.total)}
-                  </p>
-                  <p className="text-sm text-zinc-500">
-                    {formatEnum(order.payment_method)} · {formatDate(order.created_at)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <StatusBadge status={order.status} />
-                  {order.status !== "cancelled" ? (
-                    <PaymentStatusBadge status={order.payment_status} />
-                  ) : null}
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+                <X className="size-4" aria-hidden="true" />
+              </IconButton>
+            ) : null}
+          </div>
+
+          <div
+            role="group"
+            aria-label="Filtrer par statut"
+            className="mt-3 flex gap-2 overflow-x-auto pb-1"
+          >
+            {(["all", ...statuses] as const).map((status) => {
+              const selectedFilter = activeFilter === status;
+              const count = statusCounts[status] ?? 0;
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={selectedFilter}
+                  onClick={() => setStatusFilter(status)}
+                  className={cn(
+                    "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium tabular-nums",
+                    "motion-safe:transition-colors motion-safe:duration-150",
+                    focusRingClass,
+                    selectedFilter
+                      ? "bg-accent text-white"
+                      : "bg-accent-soft text-accent-text hover:bg-zinc-200",
+                  )}
+                >
+                  {status === "all" ? "Toutes" : formatEnum(status)}
+                  <span className={selectedFilter ? "text-white/80" : "text-zinc-500"}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {visibleOrders.length === 0 ? (
+            <EmptyState
+              className="mt-8"
+              icon={<ShoppingBag className="size-5" aria-hidden="true" />}
+              title="Aucune commande ne correspond à votre recherche"
+              action={
+                <Button variant="secondary" onClick={resetFilters}>
+                  Réinitialiser les filtres
+                </Button>
+              }
+            />
+          ) : (
+            <Card className="mt-4 overflow-hidden p-0">
+              <ul className="divide-y divide-zinc-100">
+                {visibleOrders.map((order) => {
+                  const attention = needsAttention(order);
+                  return (
+                    <li key={order.id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(`/commandes?order=${order.id}`)
+                        }
+                        className={cn(
+                          "flex min-h-[72px] w-full items-center gap-3 px-4 py-3 text-left",
+                          "motion-safe:transition-colors motion-safe:duration-150",
+                          focusRingClass,
+                          "hover:bg-accent-soft",
+                        )}
+                      >
+                        {attention ? (
+                          <span
+                            aria-label="Nécessite votre attention"
+                            className="size-2 shrink-0 rounded-full bg-warning"
+                          />
+                        ) : (
+                          <span className="size-2 shrink-0" aria-hidden="true" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold tabular-nums text-zinc-900">
+                            {formatOrderNumber(order.order_number)}
+                          </p>
+                          <p className="truncate text-sm text-zinc-800 tabular-nums">
+                            {order.customer_phone}
+                          </p>
+                          <p className="truncate text-caption text-zinc-500">
+                            {order.city ?? "Pas de ville"} · {order.item_count}{" "}
+                            article{order.item_count === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <div className="flex max-w-[42%] shrink-0 flex-col items-end gap-1 sm:max-w-none">
+                          <p className="font-bold tabular-nums text-zinc-900">
+                            {formatMoney(order.total)}
+                          </p>
+                          <StatusBadge status={order.status} />
+                          {order.status !== "cancelled" ? (
+                            <PaymentStatusBadge status={order.payment_status} />
+                          ) : null}
+                          <p className="text-caption tabular-nums text-zinc-500">
+                            {formatShortDate(order.created_at)}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
+        </>
       )}
 
       {creating ? (
@@ -347,46 +441,46 @@ export function OrdersView({
           onCreated={async (orderId, orderNumber) => {
             setCreating(false);
             await refreshList(await getToken());
-            pendingNotice.current = `${formatOrderNumber(orderNumber)} créée.`;
+            toast.success(`${formatOrderNumber(orderNumber)} créée.`);
             router.push(`/commandes?order=${orderId}`);
           }}
         />
       ) : null}
 
-      {selectedId && detailLoading && !detail ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Chargement de la commande"
-            className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-lg sm:rounded-card`}
-          >
-            <p className="text-sm text-zinc-500">Chargement de la commande…</p>
+      <Dialog
+        open={Boolean(selectedId && detailLoading && !detail)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeOrder();
+          }
+        }}
+      >
+        <DialogContent title="Chargement de la commande">
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-5/6" />
           </div>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
-      {selectedId && detailError && !detail ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Erreur de commande"
-            className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-lg sm:rounded-card`}
-          >
-            <p className="text-sm text-danger" role="alert">
-              {detailError}
-            </p>
-            <button
-              type="button"
-              onClick={closeOrder}
-              className={`${btnSecondary} mt-4`}
-            >
-              Fermer
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <Dialog
+        open={Boolean(selectedId && detailError && !detail)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeOrder();
+          }
+        }}
+      >
+        <DialogContent title="Commande">
+          <p className="text-sm text-danger" role="alert">
+            {detailError}
+          </p>
+          <Button className="mt-4" variant="secondary" onClick={closeOrder}>
+            Fermer
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {detail ? (
         <OrderDetailPanel
@@ -397,7 +491,6 @@ export function OrdersView({
           paymentLinksError={paymentLinksError}
           paymentLinksLoading={paymentLinksLoading}
           pending={actionPending}
-          notice={notice}
           error={actionError}
           onClose={closeOrder}
           onRetryPaymentLinks={() => void loadPaymentLinks(true)}

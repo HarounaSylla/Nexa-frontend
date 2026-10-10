@@ -37,7 +37,7 @@ export function MessageBubble({
   quoted: QuotedMessage | null;
   canJumpToQuoted: boolean;
   onJumpToQuoted: () => void;
-  onPreviewImage: (imageId: string) => void;
+  onPreviewImage: (imageId: string, title: string) => void;
   orders: ConversationListItem["orders"];
 }) {
   const role = message.turn_role;
@@ -89,7 +89,13 @@ export function MessageBubble({
               onClick={
                 message.image.deleted
                   ? undefined
-                  : () => onPreviewImage(message.image!.id)
+                  : () =>
+                      onPreviewImage(
+                        message.image!.id,
+                        message.image!.classification === "payment_proof"
+                          ? "Preuve de paiement"
+                          : "Photo",
+                      )
               }
             />
             <p className="wrap-break-word">{message.display_text || "Photo"}</p>

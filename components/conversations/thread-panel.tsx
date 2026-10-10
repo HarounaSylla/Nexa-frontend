@@ -50,7 +50,10 @@ export function ThreadPanel({
   const titleId = useId();
   const replyId = useId();
   const [draft, setDraft] = useState("");
-  const [previewImageId, setPreviewImageId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    imageId: string;
+    title: string;
+  } | null>(null);
   const [showNewMessages, setShowNewMessages] = useState(false);
   const [liveTick, setLiveTick] = useState(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
@@ -74,8 +77,8 @@ export function ThreadPanel({
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !pending) {
-        if (previewImageId) {
-          setPreviewImageId(null);
+        if (preview) {
+          setPreview(null);
         } else {
           onClose();
         }
@@ -83,7 +86,7 @@ export function ThreadPanel({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, pending, previewImageId]);
+  }, [onClose, pending, preview]);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -242,7 +245,7 @@ export function ThreadPanel({
               scrollToQuotedMessage(quotedTargetId);
             }
           }}
-          onPreviewImage={setPreviewImageId}
+          onPreviewImage={(imageId, title) => setPreview({ imageId, title })}
           orders={linkedOrders}
         />,
       );
@@ -320,10 +323,11 @@ export function ThreadPanel({
           onReturnToAgent={onReturnToAgent}
         />
       </div>
-      {previewImageId ? (
+      {preview ? (
         <ImagePreviewDialog
-          imageId={previewImageId}
-          onClose={() => setPreviewImageId(null)}
+          imageId={preview.imageId}
+          title={preview.title}
+          onClose={() => setPreview(null)}
         />
       ) : null}
     </div>

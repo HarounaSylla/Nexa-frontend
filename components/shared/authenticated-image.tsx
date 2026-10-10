@@ -115,9 +115,11 @@ function DeletedImageBox({ className }: { className: string }) {
 export function ImagePreviewDialog({
   imageId,
   onClose,
+  title = "Photo",
 }: {
   imageId: string;
   onClose: () => void;
+  title?: string;
 }) {
   const titleId = useId();
 
@@ -142,7 +144,7 @@ export function ImagePreviewDialog({
       >
         <div className="flex items-start justify-between gap-3">
           <h3 id={titleId} className="font-display text-lg font-bold">
-            Preuve de paiement
+            {title}
           </h3>
           <IconButton label="Fermer" onClick={onClose}>
             <X className="size-5" aria-hidden="true" />
@@ -151,7 +153,7 @@ export function ImagePreviewDialog({
         <div className="mt-4">
           <AuthenticatedImage
             imageId={imageId}
-            alt="Preuve de paiement"
+            alt={title}
             className="mx-auto max-h-[70dvh] w-full object-contain"
           />
         </div>
