@@ -44,9 +44,76 @@ import {
   formatOrderNumber,
   formatShortDate,
   needsAttention,
+  ORDER_STATUS_FILTERS,
   orderMatchesQuery,
-  uniqueStatuses,
+  PAYMENT_STATUS_FILTERS,
 } from "./order-helpers";
+
+function toggleValue(current: Set<string>, value: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(value)) {
+    next.delete(value);
+  } else {
+    next.add(value);
+  }
+  return next;
+}
+
+function FilterChipRow({
+  label,
+  values,
+  selected,
+  counts,
+  onToggle,
+}: {
+  label: string;
+  values: readonly string[];
+  selected: Set<string>;
+  counts: Record<string, number>;
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-caption text-zinc-500">{label}</p>
+      <div className="relative mt-1">
+        <div
+          role="group"
+          aria-label={label}
+          className="flex gap-2 overflow-x-auto pb-1"
+        >
+          {values.map((value) => {
+            const pressed = selected.has(value);
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={pressed}
+                onClick={() => onToggle(value)}
+                className={cn(
+                  "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium tabular-nums",
+                  "motion-safe:transition-colors motion-safe:duration-150",
+                  focusRingClass,
+                  pressed
+                    ? "bg-accent text-white"
+                    : "bg-accent-soft text-accent-text hover:bg-zinc-200",
+                )}
+              >
+                {formatEnum(value)}
+                <span className={pressed ? "text-white/80" : "text-zinc-500"}>
+                  {counts[value] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-linear-to-l from-background to-transparent"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function OrdersView({
   initialOrders,
@@ -61,7 +128,12 @@ export function OrdersView({
   const orderParam = searchParams.get("order");
   const [orders, setOrders] = useState(initialOrders);
   const [listError, setListError] = useState<string | null>(initialError);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilters, setStatusFilters] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [paymentFilters, setPaymentFilters] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -82,28 +154,43 @@ export function OrdersView({
     error: string | null;
   }>({ links: null, error: null });
 
-  const statuses = useMemo(() => uniqueStatuses(orders), [orders]);
-  const activeFilter =
-    statusFilter === "all" || statuses.includes(statusFilter)
-      ? statusFilter
-      : "all";
-  const filtersActive = query.trim() !== "" || activeFilter !== "all";
+  const filtersActive =
+    query.trim() !== "" || statusFilters.size > 0 || paymentFilters.size > 0;
   const visibleOrders = useMemo(() => {
     return orders.filter((order) => {
-      if (activeFilter !== "all" && order.status !== activeFilter) {
+      if (statusFilters.size > 0 && !statusFilters.has(order.status)) {
         return false;
+      }
+      if (paymentFilters.size > 0) {
+        if (order.status === "cancelled") {
+          return false;
+        }
+        if (!paymentFilters.has(order.payment_status)) {
+          return false;
+        }
       }
       return orderMatchesQuery(order, query);
     });
-  }, [activeFilter, orders, query]);
+  }, [orders, paymentFilters, query, statusFilters]);
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: orders.length };
-    for (const status of statuses) {
+    const counts: Record<string, number> = {};
+    for (const status of ORDER_STATUS_FILTERS) {
       counts[status] = orders.filter((order) => order.status === status).length;
     }
     return counts;
-  }, [orders, statuses]);
+  }, [orders]);
+
+  const paymentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const status of PAYMENT_STATUS_FILTERS) {
+      counts[status] = orders.filter(
+        (order) =>
+          order.status !== "cancelled" && order.payment_status === status,
+      ).length;
+    }
+    return counts;
+  }, [orders]);
 
   useEffect(() => {
     if (orderParam) {
@@ -186,7 +273,8 @@ export function OrdersView({
 
   function resetFilters() {
     setQuery("");
-    setStatusFilter("all");
+    setStatusFilters(new Set());
+    setPaymentFilters(new Set());
   }
 
   async function refreshList(token: string | null) {
@@ -329,36 +417,36 @@ export function OrdersView({
             ) : null}
           </div>
 
-          <div
-            role="group"
-            aria-label="Filtrer par statut"
-            className="mt-3 flex gap-2 overflow-x-auto pb-1"
-          >
-            {(["all", ...statuses] as const).map((status) => {
-              const selectedFilter = activeFilter === status;
-              const count = statusCounts[status] ?? 0;
-              return (
-                <button
-                  key={status}
-                  type="button"
-                  aria-pressed={selectedFilter}
-                  onClick={() => setStatusFilter(status)}
-                  className={cn(
-                    "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium tabular-nums",
-                    "motion-safe:transition-colors motion-safe:duration-150",
-                    focusRingClass,
-                    selectedFilter
-                      ? "bg-accent text-white"
-                      : "bg-accent-soft text-accent-text hover:bg-zinc-200",
-                  )}
-                >
-                  {status === "all" ? "Toutes" : formatEnum(status)}
-                  <span className={selectedFilter ? "text-white/80" : "text-zinc-500"}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="mt-3 flex flex-col gap-3">
+            <FilterChipRow
+              label="Statut de la commande"
+              values={ORDER_STATUS_FILTERS}
+              selected={statusFilters}
+              counts={statusCounts}
+              onToggle={(value) =>
+                setStatusFilters((current) => toggleValue(current, value))
+              }
+            />
+            <FilterChipRow
+              label="Paiement"
+              values={PAYMENT_STATUS_FILTERS}
+              selected={paymentFilters}
+              counts={paymentCounts}
+              onToggle={(value) =>
+                setPaymentFilters((current) => toggleValue(current, value))
+              }
+            />
+            {filtersActive ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="self-start"
+                icon={<X className="size-4" />}
+                onClick={resetFilters}
+              >
+                Tout effacer
+              </Button>
+            ) : null}
           </div>
 
           {visibleOrders.length === 0 ? (
@@ -400,7 +488,7 @@ export function OrdersView({
                           <span className="size-2 shrink-0" aria-hidden="true" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold tabular-nums text-zinc-900">
+                          <p className="whitespace-nowrap font-bold tabular-nums text-zinc-900">
                             {formatOrderNumber(order.order_number)}
                           </p>
                           <p className="truncate text-sm text-zinc-800 tabular-nums">
@@ -411,7 +499,7 @@ export function OrdersView({
                             article{order.item_count === 1 ? "" : "s"}
                           </p>
                         </div>
-                        <div className="flex max-w-[42%] shrink-0 flex-col items-end gap-1 sm:max-w-none">
+                        <div className="flex min-w-0 flex-col items-end gap-1">
                           <p className="font-bold tabular-nums text-zinc-900">
                             {formatMoney(order.total)}
                           </p>

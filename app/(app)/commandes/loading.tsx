@@ -6,10 +6,22 @@ export default function Loading() {
     <div>
       <PageHeader title="Commandes" />
       <Skeleton className="mt-4 h-11 w-full" />
-      <div className="mt-3 flex gap-2">
-        <Skeleton className="h-11 w-20 rounded-full" />
-        <Skeleton className="h-11 w-28 rounded-full" />
-        <Skeleton className="h-11 w-32 rounded-full" />
+      <div className="mt-3 flex flex-col gap-3">
+        <div>
+          <Skeleton className="h-3 w-36" />
+          <div className="mt-1 flex gap-2">
+            <Skeleton className="h-11 w-20 rounded-full" />
+            <Skeleton className="h-11 w-36 rounded-full" />
+            <Skeleton className="h-11 w-20 rounded-full" />
+          </div>
+        </div>
+        <div>
+          <Skeleton className="h-3 w-20" />
+          <div className="mt-1 flex gap-2">
+            <Skeleton className="h-11 w-40 rounded-full" />
+            <Skeleton className="h-11 w-44 rounded-full" />
+          </div>
+        </div>
       </div>
       <div className="mt-4 overflow-hidden rounded-card border border-zinc-200/80 bg-white">
         {Array.from({ length: 5 }, (_, index) => (

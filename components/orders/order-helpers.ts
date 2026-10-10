@@ -158,18 +158,15 @@ export function canRejectProof(order: OrderDetail): boolean {
   return order.payment_status === "proof_received";
 }
 
-const STATUS_ORDER = [
+export const ORDER_STATUS_FILTERS = [
   "created",
   "deliverer_assigned",
   "delivered",
   "cancelled",
-];
+] as const;
 
-export function uniqueStatuses(orders: { status: string }[]): string[] {
-  const found = new Set(orders.map((order) => order.status));
-  const known = STATUS_ORDER.filter((status) => found.has(status));
-  const rest = [...found]
-    .filter((status) => !STATUS_ORDER.includes(status))
-    .sort();
-  return [...known, ...rest];
-}
+export const PAYMENT_STATUS_FILTERS = [
+  "pending",
+  "proof_received",
+  "paid",
+] as const;
