@@ -13,7 +13,7 @@ export async function submitOnboarding(
   const name = String(formData.get("name") ?? "").trim();
 
   if (!name) {
-    return { error: "Shop name is required." };
+    return { error: "Le nom de la boutique est requis." };
   }
 
   await onboardMerchant(await getToken(), name);

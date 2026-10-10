@@ -18,8 +18,8 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Nexa merchant dashboard",
-  description: "Catalogue, orders, conversations, and delivery for Nexa merchants.",
+  title: "Nexa — Espace commerçant",
+  description: "Catalogue, commandes, conversations et livraison pour les commerçants Nexa.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

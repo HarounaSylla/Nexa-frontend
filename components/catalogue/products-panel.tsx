@@ -1,9 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Package, Plus } from "lucide-react";
 
-import { PhotoPlaceholderIcon } from "@/components/icons";
-import { errorMessage, mediaUrl } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/toast";
+import { errorMessage } from "@/lib/api";
 import {
   createProduct,
   deleteProduct,
@@ -13,21 +17,26 @@ import {
   updateProduct,
   uploadProductPhoto,
 } from "@/lib/catalogue-api";
-import {
-  bannerErrorClass,
-  btnDanger,
-  btnDangerGhost,
-  btnPrimary,
-  btnSecondary,
-  cardClass,
-  cardInteractiveClass,
-  emptyStateClass,
-} from "@/lib/ui";
+import { bannerErrorClass } from "@/lib/ui";
 
 import {
-  ProductFormDialog,
-  productToInput,
-} from "./product-form-dialog";
+  displayCatalogueError,
+  normalizeSearch,
+  UNCATEGORIZED_KEY,
+} from "./catalogue-helpers";
+import { ProductFilters } from "./product-filters";
+import { ProductFormDialog, productToInput } from "./product-form-dialog";
+import { ProductTile } from "./product-tile";
+
+function toggleValue(current: Set<string>, value: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(value)) {
+    next.delete(value);
+  } else {
+    next.add(value);
+  }
+  return next;
+}
 
 export function ProductsPanel({
   getToken,
@@ -35,6 +44,9 @@ export function ProductsPanel({
   categories,
   loading,
   error,
+  editing,
+  onEditingChange,
+  onSubtitleChange,
   onRefresh,
 }: {
   getToken: () => Promise<string | null>;
@@ -42,76 +54,150 @@ export function ProductsPanel({
   categories: CatalogueCategory[];
   loading: boolean;
   error: string | null;
-  onRefresh: () => Promise<void>;
+  editing: "create" | CatalogueProduct | null;
+  onEditingChange: (value: "create" | CatalogueProduct | null) => void;
+  onSubtitleChange: (value: string) => void;
+  onRefresh: () => Promise<CatalogueProduct[]>;
 }) {
-  const [formMode, setFormMode] = useState<"create" | CatalogueProduct | null>(
-    null,
-  );
   const [formError, setFormError] = useState<string | null>(null);
   const [formPending, setFormPending] = useState(false);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [photoPending, setPhotoPending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const photoProductId = useRef<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [outOfStock, setOutOfStock] = useState(false);
+
+  const filtersActive =
+    query.trim() !== "" || selectedCategories.size > 0 || outOfStock;
+  const outOfStockCount = products.filter((row) => row.stock_qty === 0).length;
+
+  const visibleProducts = useMemo(() => {
+    const needle = normalizeSearch(query);
+    return products.filter((product) => {
+      if (selectedCategories.size > 0) {
+        const key = product.category ?? UNCATEGORIZED_KEY;
+        if (!selectedCategories.has(key)) {
+          return false;
+        }
+      }
+      if (outOfStock && product.stock_qty !== 0) {
+        return false;
+      }
+      if (needle && !normalizeSearch(product.name).includes(needle)) {
+        return false;
+      }
+      return true;
+    });
+  }, [outOfStock, products, query, selectedCategories]);
+
+  useEffect(() => {
+    const total = products.length;
+    const noun = total === 1 ? "produit" : "produits";
+    onSubtitleChange(
+      filtersActive
+        ? `${visibleProducts.length} sur ${total} ${noun}`
+        : `${total} ${noun}`,
+    );
+  }, [filtersActive, onSubtitleChange, products.length, visibleProducts.length]);
+
+  function resetFilters() {
+    setQuery("");
+    setSelectedCategories(new Set());
+    setOutOfStock(false);
+  }
 
   async function submitForm(input: ProductInput) {
     setFormPending(true);
     setFormError(null);
     try {
       const token = await getToken();
-      if (formMode === "create") {
+      if (editing === "create") {
         await createProduct(token, input);
-      } else if (formMode) {
-        await updateProduct(token, formMode.id, input);
+        toast.success("Produit ajouté.");
+      } else if (editing) {
+        await updateProduct(token, editing.id, input);
+        toast.success("Produit modifié.");
       }
-      setFormMode(null);
+      onEditingChange(null);
       await onRefresh();
     } catch (err) {
-      setFormError(errorMessage(err));
+      const message = displayCatalogueError(errorMessage(err));
+      setFormError(message);
+      toast.error(message);
     } finally {
       setFormPending(false);
     }
   }
 
-  async function confirmDelete(productId: string) {
-    setPendingId(productId);
+  async function confirmDelete() {
+    if (!editing || editing === "create") {
+      return;
+    }
+    setDeletePending(true);
     setActionError(null);
+    setFormError(null);
     try {
-      await deleteProduct(await getToken(), productId);
-      setConfirmId(null);
+      await deleteProduct(await getToken(), editing.id);
+      toast.success("Produit supprimé.");
+      onEditingChange(null);
       await onRefresh();
     } catch (err) {
-      setConfirmId(null);
-      setActionError(errorMessage(err));
+      const message = displayCatalogueError(errorMessage(err));
+      setFormError(message);
+      setActionError(message);
+      toast.error(message);
     } finally {
-      setPendingId(null);
+      setDeletePending(false);
     }
   }
 
-  async function onPhotoSelected(file: File | undefined) {
-    const productId = photoProductId.current;
-    if (!file || !productId) {
+  async function onUploadPhoto(file: File) {
+    if (!editing || editing === "create") {
       return;
     }
-    setPendingId(productId);
+    setPhotoPending(true);
+    setFormError(null);
     setActionError(null);
     try {
-      await uploadProductPhoto(await getToken(), productId, file);
-      await onRefresh();
+      const updated = await uploadProductPhoto(
+        await getToken(),
+        editing.id,
+        file,
+      );
+      toast.success("Photo mise à jour.");
+      const next = await onRefresh();
+      const fresh = next.find((row) => row.id === updated.id) ?? updated;
+      onEditingChange(fresh);
     } catch (err) {
-      setActionError(errorMessage(err));
+      const message = displayCatalogueError(errorMessage(err));
+      setFormError(message);
+      toast.error(message);
     } finally {
-      setPendingId(null);
-      photoProductId.current = null;
-      if (photoInputRef.current) {
-        photoInputRef.current.value = "";
-      }
+      setPhotoPending(false);
     }
   }
 
   if (loading) {
-    return <p className="mt-6 text-sm text-zinc-500">Chargement des produits…</p>;
+    return (
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: 8 }, (_, index) => (
+          <div
+            key={index}
+            className="overflow-hidden rounded-card border border-zinc-200/80 bg-white"
+          >
+            <Skeleton className="aspect-square w-full rounded-none" />
+            <div className="flex flex-col gap-2 p-3">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   if (error) {
@@ -123,23 +209,7 @@ export function ProductsPanel({
   }
 
   return (
-    <div className="mt-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-zinc-500 tabular-nums">
-          {products.length} produit{products.length === 1 ? "" : "s"}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setFormError(null);
-            setFormMode("create");
-          }}
-          className={btnPrimary}
-        >
-          Ajouter un produit
-        </button>
-      </div>
-
+    <div className="mt-2">
       {actionError ? (
         <p className={`mt-4 ${bannerErrorClass}`} role="alert">
           {displayCatalogueError(actionError)}
@@ -147,160 +217,84 @@ export function ProductsPanel({
       ) : null}
 
       {products.length === 0 ? (
-        <div className={`mt-8 ${emptyStateClass}`}>
-          <p className="font-medium text-zinc-800">Aucun produit pour le moment</p>
-          <p className="mt-1 text-sm">
-            Ajoutez votre premier produit pour constituer le catalogue.
-          </p>
-        </div>
+        <EmptyState
+          className="mt-8"
+          icon={<Package className="size-5" aria-hidden="true" />}
+          title="Aucun produit pour le moment"
+          description="Ajoutez votre premier produit pour constituer le catalogue."
+          action={
+            <Button
+              icon={<Plus className="size-4" />}
+              onClick={() => onEditingChange("create")}
+            >
+              Ajouter un produit
+            </Button>
+          }
+        />
       ) : (
-        <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => {
-            const src = mediaUrl(product.image_url);
-            return (
-              <li key={product.id} className={`${cardInteractiveClass} overflow-hidden`}>
-                {src ? (
-                  // Backend static files, not the Next.js image optimizer.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={src}
-                    alt=""
-                    className="h-40 w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-40 w-full items-center justify-center bg-accent-soft text-zinc-400">
-                    <PhotoPlaceholderIcon className="size-8" />
-                  </div>
-                )}
-                <div className="flex flex-col gap-3 p-4">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{product.name}</p>
-                    <p className="mt-1 truncate text-sm text-zinc-500 tabular-nums">
-                      {product.category ?? "Sans catégorie"} · Stock {product.stock_qty}
-                    </p>
-                    <p className="mt-1 font-medium tabular-nums">
-                      {formatPrice(product.price)}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      disabled={pendingId === product.id}
-                      onClick={() => {
-                        setFormError(null);
-                        setFormMode(product);
-                      }}
-                      className={btnSecondary}
-                    >
-                      Modifier
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pendingId === product.id}
-                      onClick={() => {
-                        photoProductId.current = product.id;
-                        photoInputRef.current?.click();
-                      }}
-                      className={btnSecondary}
-                    >
-                      {product.image_url ? "Remplacer la photo" : "Ajouter une photo"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pendingId === product.id}
-                      onClick={() => {
-                        setActionError(null);
-                        setConfirmId(product.id);
-                      }}
-                      className={btnDangerGhost}
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <ProductFilters
+            query={query}
+            onQueryChange={setQuery}
+            categories={categories}
+            selectedCategories={selectedCategories}
+            onToggleCategory={(key) =>
+              setSelectedCategories((current) => toggleValue(current, key))
+            }
+            outOfStockCount={outOfStockCount}
+            outOfStockSelected={outOfStock}
+            onToggleOutOfStock={() => setOutOfStock((value) => !value)}
+            filtersActive={filtersActive}
+            onReset={resetFilters}
+          />
+
+          {visibleProducts.length === 0 ? (
+            <EmptyState
+              className="mt-8"
+              icon={<Package className="size-5" aria-hidden="true" />}
+              title="Aucun produit ne correspond à votre recherche"
+              action={
+                <Button variant="secondary" onClick={resetFilters}>
+                  Réinitialiser les filtres
+                </Button>
+              }
+            />
+          ) : (
+            <ul className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+              {visibleProducts.map((product) => (
+                <ProductTile
+                  key={product.id}
+                  product={product}
+                  onOpen={() => {
+                    setFormError(null);
+                    onEditingChange(product);
+                  }}
+                />
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        className="hidden"
-        suppressHydrationWarning
-        onChange={(event) => onPhotoSelected(event.target.files?.[0])}
-      />
-
-      {formMode ? (
+      {editing ? (
         <ProductFormDialog
-          title={formMode === "create" ? "Ajouter un produit" : "Modifier le produit"}
-          initial={formMode === "create" ? undefined : productToInput(formMode)}
+          key={editing === "create" ? "create" : editing.id}
+          title={
+            editing === "create" ? "Ajouter un produit" : "Modifier le produit"
+          }
+          initial={editing === "create" ? undefined : productToInput(editing)}
+          product={editing === "create" ? null : editing}
           categories={categories}
-          error={formError ? displayCatalogueError(formError) : null}
+          error={formError}
           pending={formPending}
-          onClose={() => setFormMode(null)}
+          photoPending={photoPending}
+          deletePending={deletePending}
+          onClose={() => onEditingChange(null)}
           onSubmit={submitForm}
+          onUploadPhoto={onUploadPhoto}
+          onDelete={editing === "create" ? undefined : confirmDelete}
         />
-      ) : null}
-
-      {confirmId ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-title"
-            className={`${cardClass} w-full rounded-t-2xl p-5 sm:max-w-md sm:rounded-card`}
-          >
-            <h2 id="delete-title" className="font-display text-lg font-bold">
-              Supprimer ce produit ?
-            </h2>
-            <p className="mt-2 text-sm text-zinc-500">
-              Cette action est irréversible. Les produits déjà présents sur des
-              commandes ne peuvent pas être supprimés.
-            </p>
-            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={pendingId === confirmId}
-                onClick={() => setConfirmId(null)}
-                className={btnSecondary}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                disabled={pendingId === confirmId}
-                onClick={() => confirmDelete(confirmId)}
-                className={btnDanger}
-              >
-                {pendingId === confirmId ? "Suppression…" : "Supprimer"}
-              </button>
-            </div>
-          </div>
-        </div>
       ) : null}
     </div>
   );
-}
-
-function formatPrice(price: string | number | null): string {
-  if (price == null || price === "") {
-    return "Pas de prix";
-  }
-  const value = typeof price === "number" ? price : Number(price);
-  if (Number.isNaN(value)) {
-    return String(price);
-  }
-  return `${value.toLocaleString("fr-FR")} F`;
-}
-
-const DELETE_BLOCKED_EN =
-  "This product has existing orders and cannot be deleted. Set stock to 0 instead of removing it from the catalogue.";
-const DELETE_BLOCKED_FR =
-  "Ce produit a des commandes existantes et ne peut pas être supprimé. Mettez le stock à 0 plutôt que de le retirer du catalogue.";
-
-function displayCatalogueError(message: string): string {
-  return message === DELETE_BLOCKED_EN ? DELETE_BLOCKED_FR : message;
 }

@@ -14,14 +14,15 @@ export default async function Home() {
     <main className="mx-auto flex min-h-full w-full max-w-lg flex-1 flex-col justify-center gap-6 px-4 py-10 sm:px-6">
       <h1 className={pageTitleClass}>Nexa</h1>
       <p className="text-zinc-500">
-        Merchant dashboard for catalogue, orders, conversations, and delivery.
+        Catalogue, commandes, conversations et livraison pour les commerçants
+        Nexa.
       </p>
       <div className="flex flex-col gap-3 sm:flex-row">
         <Link href="/sign-in" className={btnPrimary}>
-          Sign in
+          Se connecter
         </Link>
         <Link href="/sign-up" className={btnSecondary}>
-          Create account
+          Créer un compte
         </Link>
       </div>
     </main>

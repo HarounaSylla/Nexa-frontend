@@ -20,10 +20,11 @@ export default async function OnboardingPage() {
   return (
     <main className="mx-auto flex min-h-full w-full max-w-lg flex-1 flex-col justify-center gap-6 px-4 py-10 sm:px-6">
       <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-900">
-        Set up your shop
+        Configurez votre boutique
       </h1>
       <p className="text-zinc-500">
-        Enter the shop name customers will see. You can change more later.
+        Saisissez le nom que verront vos clients. Vous pourrez modifier le reste
+        plus tard.
       </p>
       <OnboardingForm />
     </main>
