@@ -1,7 +1,17 @@
 import { auth } from "@clerk/nextjs/server";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { LandingFooter } from "@/components/landing/landing-footer";
+import { LandingHeader } from "@/components/landing/landing-header";
+import { LandingHero } from "@/components/landing/landing-hero";
+import { LandingSections } from "@/components/landing/landing-sections";
+
+export const metadata: Metadata = {
+  title: "Nexa — L'agent WhatsApp des commerçants",
+  description:
+    "Nexa répond à vos clients sur WhatsApp, prend leurs commandes et les range dans votre tableau de bord.",
+};
 
 export default async function Home() {
   const { isAuthenticated } = await auth();
@@ -10,18 +20,13 @@ export default async function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-lg flex-1 flex-col justify-center gap-6 px-4 py-10 sm:px-6">
-      <h1 className="text-page-title">Nexa</h1>
-      <p className="text-zinc-500">
-        Catalogue, commandes, conversations et livraison pour les commerçants
-        Nexa.
-      </p>
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button href="/sign-in">Se connecter</Button>
-        <Button href="/sign-up" variant="secondary">
-          Créer un compte
-        </Button>
-      </div>
-    </main>
+    <div className="flex min-h-full flex-col overflow-x-clip bg-background">
+      <LandingHeader />
+      <main>
+        <LandingHero />
+        <LandingSections />
+      </main>
+      <LandingFooter />
+    </div>
   );
 }

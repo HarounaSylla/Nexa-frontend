@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="15" fill="#4b5563"/>
+  <g transform="translate(12 12) scale(0.625)">
+    <mask id="nexa-icon-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <path fill="#fff" d="M14 6h36a8 8 0 0 1 8 8v28a8 8 0 0 1-8 8H28L14 60V50a8 8 0 0 1-8-8V14a8 8 0 0 1 8-8z"/>
+      <path d="M23 38V18l18 20V18" fill="none" stroke="#000" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+    <rect width="64" height="64" fill="#fff" mask="url(#nexa-icon-mask)"/>
+  </g>
+</svg>
