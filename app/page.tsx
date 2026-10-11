@@ -7,10 +7,15 @@ import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingHero } from "@/components/landing/landing-hero";
 import { LandingSections } from "@/components/landing/landing-sections";
 
+const title = "Nexa — L'agent WhatsApp des commerçants";
+const description =
+  "Nexa répond à vos clients sur WhatsApp, prend leurs commandes et les range dans votre tableau de bord.";
+
 export const metadata: Metadata = {
-  title: "Nexa — L'agent WhatsApp des commerçants",
-  description:
-    "Nexa répond à vos clients sur WhatsApp, prend leurs commandes et les range dans votre tableau de bord.",
+  title,
+  description,
+  openGraph: { title, description },
+  twitter: { title, description },
 };
 
 export default async function Home() {

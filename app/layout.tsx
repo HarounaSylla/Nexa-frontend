@@ -18,8 +18,23 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Nexa — Espace commerçant",
-  description: "Catalogue, commandes, conversations et livraison pour les commerçants Nexa.",
+  description:
+    "Catalogue, commandes, conversations et livraison pour les commerçants Nexa.",
+  openGraph: {
+    siteName: "Nexa",
+    locale: "fr_FR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Nexa",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

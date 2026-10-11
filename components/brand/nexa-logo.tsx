@@ -62,14 +62,21 @@ export function NexaAppIcon({ className }: { className?: string }) {
 export function NexaLogo({
   className,
   iconClassName,
+  wordmarkClassName,
 }: {
   className?: string;
   iconClassName?: string;
+  wordmarkClassName?: string;
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       <NexaAppIcon className={cn("size-8 shrink-0 sm:size-9", iconClassName)} />
-      <span className="font-display text-xl font-extrabold tracking-tight text-zinc-900 max-[399px]:sr-only sm:text-[22px]">
+      <span
+        className={cn(
+          "font-display text-xl font-extrabold tracking-tight text-zinc-900 sm:text-[22px]",
+          wordmarkClassName ?? "max-[399px]:sr-only",
+        )}
+      >
         Nexa
       </span>
     </span>

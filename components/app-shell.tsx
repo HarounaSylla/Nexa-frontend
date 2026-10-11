@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AccountMenu } from "@/components/account-menu";
+import { NexaLogo } from "@/components/brand/nexa-logo";
 import { NavIcon, TikTokIcon, WhatsAppIcon } from "@/components/icons";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ShopMark } from "@/components/shop-mark";
@@ -24,9 +25,22 @@ export function AppShell({
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-header border-b border-zinc-200/80 bg-white shadow-header">
-        <div className="flex min-h-14 items-center gap-2 px-3 sm:h-16 sm:gap-4 sm:px-4">
+        <div className="flex min-h-14 flex-nowrap items-center gap-2 px-3 sm:h-16 sm:gap-4 sm:px-4">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <ShopMark name={shopName} />
+            <Link
+              href="/dashboard"
+              aria-label="Nexa, tableau de bord"
+              className={cn("shrink-0 rounded-control", focusRingClass)}
+            >
+              <NexaLogo wordmarkClassName="max-sm:sr-only" />
+            </Link>
+            <span
+              className="hidden h-6 w-px shrink-0 bg-zinc-200 sm:block"
+              aria-hidden="true"
+            />
+            <span className="hidden shrink-0 sm:inline-flex">
+              <ShopMark name={shopName} />
+            </span>
             <p className="min-w-0 truncate font-display text-sm font-bold text-zinc-900">
               {shopName}
             </p>
@@ -147,7 +161,7 @@ function ChannelToggle() {
       >
         <TikTokIcon className="size-4" />
         <span className="hidden sm:inline">TikTok</span>
-        <span className="rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+        <span className="hidden rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase min-[400px]:inline">
           Bientôt
         </span>
       </button>
