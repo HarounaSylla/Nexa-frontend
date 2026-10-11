@@ -461,7 +461,7 @@ export function OrdersView({
               }
             />
           ) : (
-            <Card className="mt-4 overflow-hidden p-0">
+            <Card flush className="mt-4 overflow-hidden">
               <ul className="divide-y divide-zinc-100">
                 {visibleOrders.map((order) => {
                   const attention = needsAttention(order);

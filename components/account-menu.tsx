@@ -12,7 +12,6 @@ import {
 
 import { ShopAvatar } from "@/components/shop-mark";
 import { IconButton } from "@/components/ui/icon-button";
-import { cardClass } from "@/lib/ui";
 
 export function AccountMenu({ shopName }: { shopName: string }) {
   const [open, setOpen] = useState(false);
@@ -91,7 +90,7 @@ export function AccountMenu({ shopName }: { shopName: string }) {
           id={menuId}
           role="menu"
           onKeyDown={onMenuKeyDown}
-          className={`${cardClass} absolute right-0 z-overlay mt-2 w-56 p-1`}
+          className="absolute right-0 z-overlay mt-2 w-56 rounded-card border border-zinc-200/80 bg-white p-1 shadow-card"
         >
           <p className="truncate px-3 py-2 text-sm font-medium text-zinc-900">
             {shopName}

@@ -422,7 +422,7 @@ export function ConversationsView({
               }
             />
           ) : (
-            <Card className="mt-4 overflow-hidden p-0">
+            <Card flush className="mt-4 overflow-hidden">
               <ul className="divide-y divide-zinc-100">
                 {visibleConversations.map((row) => {
                   const orders = row.orders ?? [];

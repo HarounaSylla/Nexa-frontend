@@ -1,39 +1,37 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId } from "react";
 
-import { bannerErrorClass, btnPrimary, inputClass } from "@/lib/ui";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
+import { bannerErrorClass } from "@/lib/ui";
 
 import { submitOnboarding } from "./actions";
 
 export function OnboardingForm() {
   const [state, formAction, pending] = useActionState(submitOnboarding, null);
+  const nameId = useId();
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <label className="flex flex-col gap-2 text-sm font-medium">
-        Nom de la boutique
-        <input
+      <Field label="Nom de la boutique" htmlFor={nameId}>
+        <Input
+          id={nameId}
           name="name"
           type="text"
           required
           maxLength={200}
           autoComplete="organization"
-          className={inputClass}
         />
-      </label>
+      </Field>
       {state?.error ? (
         <p className={bannerErrorClass} role="alert">
           {state.error}
         </p>
       ) : null}
-      <button
-        type="submit"
-        disabled={pending}
-        className={btnPrimary}
-      >
+      <Button type="submit" disabled={pending}>
         {pending ? "Enregistrement…" : "Continuer"}
-      </button>
+      </Button>
     </form>
   );
 }

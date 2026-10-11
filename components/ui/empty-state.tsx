@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
-import { emptyStateClass } from "@/lib/ui";
+
+const emptyStateClass =
+  "rounded-card border border-zinc-200/80 bg-white px-4 py-10 text-center text-zinc-500 shadow-card sm:px-5";
 
 export function EmptyState({
   icon,

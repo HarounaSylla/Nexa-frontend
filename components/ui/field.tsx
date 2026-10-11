@@ -7,7 +7,9 @@ import type {
 } from "react";
 
 import { cn } from "@/lib/cn";
-import { inputClass } from "@/lib/ui";
+
+const inputClass =
+  "h-11 rounded-control border border-zinc-200 bg-white px-3 text-base font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-[background-color,color,box-shadow,opacity,border-color] motion-safe:duration-150";
 
 export function Field({
   label,

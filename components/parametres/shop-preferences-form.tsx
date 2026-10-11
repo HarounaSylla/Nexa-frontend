@@ -8,19 +8,16 @@ import {
   type ReactNode,
 } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, Select, Textarea } from "@/components/ui/field";
+import { toast } from "@/components/ui/toast";
 import { errorMessage } from "@/lib/api";
 import {
   type MerchantPreferences,
   updatePreferences,
 } from "@/lib/preferences-api";
-import {
-  bannerErrorClass,
-  bannerSuccessClass,
-  btnPrimary,
-  cardClass,
-  inputClass,
-  sectionTitleClass,
-} from "@/lib/ui";
+import { bannerErrorClass } from "@/lib/ui";
 
 import {
   formFromPreferences,
@@ -31,6 +28,7 @@ import {
 } from "./preferences-helpers";
 
 const PAYMENT_REQUIRED = "Au moins un mode de paiement est requis.";
+const FORM_ID = "shop-preferences-form";
 
 export function ShopPreferencesForm({
   getToken,
@@ -54,7 +52,6 @@ export function ShopPreferencesForm({
   const [form, setForm] = useState(() => formFromPreferences(preferences));
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const zones = useMemo(
@@ -79,6 +76,12 @@ export function ShopPreferencesForm({
     setForm((current) => ({ ...current, [field]: next }));
   }
 
+  function resetForm() {
+    setForm(formFromPreferences(preferences));
+    setPaymentError(null);
+    setError(null);
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!form.accepts_cash_on_delivery && !form.accepts_online_payment) {
@@ -87,7 +90,6 @@ export function ShopPreferencesForm({
     }
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const saved = await updatePreferences(
         await getToken(),
@@ -95,23 +97,27 @@ export function ShopPreferencesForm({
       );
       onPreferencesChange(saved);
       setForm(formFromPreferences(saved));
-      setNotice("Préférences enregistrées.");
+      toast.success("Préférences enregistrées.");
     } catch (err) {
-      setError(errorMessage(err));
+      const message = errorMessage(err);
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <section className={`${cardClass} p-5`}>
-        <h2 className={sectionTitleClass}>Paiement</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Les modes de paiement que votre boutique accepte. L&apos;agent ne
-          propose que ceux-ci.
-        </p>
-        <div className="mt-4 flex flex-col gap-2">
+    <div className={`flex flex-col gap-4 ${dirty ? "pb-28 sm:pb-0" : ""}`}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Paiement</CardTitle>
+          <p className="text-sm text-zinc-500">
+            Les modes de paiement que votre boutique accepte. L&apos;agent ne
+            propose que ceux-ci.
+          </p>
+        </CardHeader>
+        <div className="flex flex-col gap-2">
           <label
             htmlFor={cashId}
             className="flex min-h-11 items-center gap-3 text-sm font-medium"
@@ -154,119 +160,134 @@ export function ShopPreferencesForm({
             {paymentError}
           </p>
         ) : null}
-      </section>
+      </Card>
 
       {afterPayment?.(form.accepts_online_payment)}
 
-      <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-        <section className={`${cardClass} p-5`}>
-        <h2 className={sectionTitleClass}>Infos de la boutique</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Ce que l&apos;agent peut répondre aux clients. S&apos;il ne trouve pas
-          l&apos;information ici, il ne l&apos;invente pas : il vous passe la
-          conversation.
-        </p>
+      <form id={FORM_ID} className="flex flex-col gap-4" onSubmit={onSubmit}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Infos de la boutique</CardTitle>
+            <p className="text-sm text-zinc-500">
+              Ce que l&apos;agent peut répondre aux clients. S&apos;il ne trouve
+              pas l&apos;information ici, il ne l&apos;invente pas : il vous
+              passe la conversation.
+            </p>
+          </CardHeader>
 
-        <label
-          htmlFor={timezoneId}
-          className="mt-4 flex flex-col gap-1 text-sm font-medium"
-        >
-          Fuseau horaire
-          <select
-            id={timezoneId}
-            value={form.timezone}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                timezone: event.target.value,
-              }))
-            }
-            className={inputClass}
+          <div className="flex flex-col gap-4">
+            <Field
+              label="Fuseau horaire"
+              htmlFor={timezoneId}
+              hint="Sert à l'agent à savoir si votre boutique est ouverte quand un client écrit."
+            >
+              <Select
+                id={timezoneId}
+                value={form.timezone}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    timezone: event.target.value,
+                  }))
+                }
+              >
+                {zones.map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <PrefTextarea
+              id={addressId}
+              label="Adresse de la boutique"
+              placeholder="Ex. : 12 rue du Marché, centre-ville"
+              value={form.shop_address}
+              onChange={(value) =>
+                setForm((current) => ({ ...current, shop_address: value }))
+              }
+            />
+            <PrefTextarea
+              id={hoursId}
+              label="Horaires d'ouverture"
+              placeholder="Ex. : Lundi au samedi, 9h à 19h"
+              value={form.opening_hours}
+              onChange={(value) =>
+                setForm((current) => ({ ...current, opening_hours: value }))
+              }
+            />
+            <PrefTextarea
+              id={returnsId}
+              label="Retours et échanges"
+              placeholder="Ex. : Échange possible sous 48h si l'article est intact."
+              value={form.return_policy}
+              onChange={(value) =>
+                setForm((current) => ({ ...current, return_policy: value }))
+              }
+            />
+            <PrefTextarea
+              id={feeId}
+              label="Frais de livraison"
+              placeholder="Ex. : 1 500 F en ville, à régler au livreur."
+              help="Précisez les tarifs ou comment ils sont fixés. Laissez vide si vous les confirmez au cas par cas : l'agent dira alors au client que les frais lui seront confirmés."
+              value={form.delivery_fee_note}
+              onChange={(value) =>
+                setForm((current) => ({ ...current, delivery_fee_note: value }))
+              }
+            />
+            <PrefTextarea
+              id={extraId}
+              label="Autres informations"
+              placeholder="Ex. : Nous livrons aussi le dimanche sur demande."
+              value={form.extra_info}
+              onChange={(value) =>
+                setForm((current) => ({ ...current, extra_info: value }))
+              }
+            />
+          </div>
+        </Card>
+
+        {error ? (
+          <p className={bannerErrorClass} role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <div className={dirty ? "hidden sm:block" : undefined}>
+          <Button
+            type="submit"
+            disabled={saving || !dirty}
+            className="w-full sm:w-auto"
           >
-            {zones.map((zone) => (
-              <option key={zone} value={zone}>
-                {zone}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs font-normal text-zinc-500">
-            Sert à l&apos;agent à savoir si votre boutique est ouverte quand un
-            client écrit.
-          </span>
-        </label>
-
-        <TextAreaField
-          id={addressId}
-          label="Adresse de la boutique"
-          placeholder="Ex. : 12 rue du Marché, centre-ville"
-          value={form.shop_address}
-          onChange={(value) =>
-            setForm((current) => ({ ...current, shop_address: value }))
-          }
-        />
-        <TextAreaField
-          id={hoursId}
-          label="Horaires d'ouverture"
-          placeholder="Ex. : Lundi au samedi, 9h à 19h"
-          value={form.opening_hours}
-          onChange={(value) =>
-            setForm((current) => ({ ...current, opening_hours: value }))
-          }
-        />
-        <TextAreaField
-          id={returnsId}
-          label="Retours et échanges"
-          placeholder="Ex. : Échange possible sous 48h si l'article est intact."
-          value={form.return_policy}
-          onChange={(value) =>
-            setForm((current) => ({ ...current, return_policy: value }))
-          }
-        />
-        <TextAreaField
-          id={feeId}
-          label="Frais de livraison"
-          placeholder="Ex. : 1 500 F en ville, à régler au livreur."
-          help="Précisez les tarifs ou comment ils sont fixés. Laissez vide si vous les confirmez au cas par cas : l'agent dira alors au client que les frais lui seront confirmés."
-          value={form.delivery_fee_note}
-          onChange={(value) =>
-            setForm((current) => ({ ...current, delivery_fee_note: value }))
-          }
-        />
-        <TextAreaField
-          id={extraId}
-          label="Autres informations"
-          placeholder="Ex. : Nous livrons aussi le dimanche sur demande."
-          value={form.extra_info}
-          onChange={(value) =>
-            setForm((current) => ({ ...current, extra_info: value }))
-          }
-        />
-      </section>
-
-      {notice ? (
-        <p className={bannerSuccessClass} role="status">
-          {notice}
-        </p>
-      ) : null}
-      {error ? (
-        <p className={bannerErrorClass} role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <button
-        type="submit"
-        disabled={saving || !dirty}
-        className={`${btnPrimary} w-full sm:w-auto`}
-      >
-        {saving ? "Enregistrement…" : "Enregistrer"}
-      </button>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </div>
       </form>
+
+      {dirty ? (
+        <div className="fixed inset-x-0 z-header border-t border-zinc-200 bg-white px-4 py-3 sm:hidden bottom-[calc(3.5rem+env(safe-area-inset-bottom))]">
+          <div className="flex flex-col gap-2">
+            <Button type="submit" form={FORM_ID} disabled={saving} className="w-full">
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              disabled={saving}
+              onClick={resetForm}
+            >
+              Annuler les modifications
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function TextAreaField({
+function PrefTextarea({
   id,
   label,
   placeholder,
@@ -282,22 +303,18 @@ function TextAreaField({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="mt-4">
-      <label htmlFor={id} className="flex flex-col gap-1 text-sm font-medium">
-        {label}
-        <textarea
+    <div>
+      <Field label={label} htmlFor={id}>
+        <Textarea
           id={id}
           rows={3}
           maxLength={TEXT_FIELD_MAX}
           placeholder={placeholder}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={`${inputClass} h-auto py-2`}
         />
-      </label>
-      {help ? (
-        <p className="mt-1 text-xs text-zinc-500">{help}</p>
-      ) : null}
+      </Field>
+      {help ? <p className="mt-1 text-xs text-zinc-500">{help}</p> : null}
       <p className="mt-1 text-right text-xs tabular-nums text-zinc-500">
         {value.length} / {TEXT_FIELD_MAX}
       </p>

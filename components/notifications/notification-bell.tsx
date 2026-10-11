@@ -2,11 +2,25 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
-
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Bell } from "lucide-react";
 
+import {
+  NOTIFICATION_LIST_CLASS,
+  NotificationRow,
+} from "@/components/notifications/notification-row";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { IconButton } from "@/components/ui/icon-button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/api";
 import {
   listNotifications,
@@ -14,13 +28,9 @@ import {
   markNotificationRead,
   type NotificationItem,
 } from "@/lib/notifications-api";
+import { bannerErrorClass } from "@/lib/ui";
 
-import {
-  notificationHref,
-  notificationSecondary,
-  notificationSentence,
-  unreadCount,
-} from "./notification-copy";
+import { notificationHref, unreadCount } from "./notification-copy";
 
 const POLL_MS = 45_000;
 
@@ -28,6 +38,9 @@ export function NotificationBell() {
   const { getToken } = useAuth();
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const panelId = useId();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -35,15 +48,26 @@ export function NotificationBell() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const pull = useCallback(async () => {
+    return listNotifications(await getToken());
+  }, [getToken]);
+
+  function commitList(next: NotificationItem[]) {
+    setItems(next);
+    setStatus("ready");
+    setError(null);
+  }
+
+  function commitError(err: unknown) {
+    setStatus("error");
+    setError(errorMessage(err));
+  }
+
   async function refresh() {
     try {
-      const next = await listNotifications(await getToken());
-      setItems(next);
-      setStatus("ready");
-      setError(null);
+      commitList(await pull());
     } catch (err) {
-      setStatus("error");
-      setError(errorMessage(err));
+      commitError(err);
     }
   }
 
@@ -51,35 +75,26 @@ export function NotificationBell() {
     let cancelled = false;
     (async () => {
       try {
-        const next = await listNotifications(await getToken());
+        const next = await pull();
         if (!cancelled) {
-          setItems(next);
-          setStatus("ready");
-          setError(null);
+          commitList(next);
         }
       } catch (err) {
         if (!cancelled) {
-          setStatus("error");
-          setError(errorMessage(err));
+          commitError(err);
         }
       }
     })();
     const timer = window.setInterval(() => {
-      if (cancelled) {
-        return;
-      }
       void (async () => {
         try {
-          const next = await listNotifications(await getToken());
+          const next = await pull();
           if (!cancelled) {
-            setItems(next);
-            setStatus("ready");
-            setError(null);
+            commitList(next);
           }
         } catch (err) {
           if (!cancelled) {
-            setStatus("error");
-            setError(errorMessage(err));
+            commitError(err);
           }
         }
       })();
@@ -88,7 +103,7 @@ export function NotificationBell() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [getToken]);
+  }, [pull]);
 
   useEffect(() => {
     if (!open) {
@@ -98,12 +113,14 @@ export function NotificationBell() {
     function onPointerDown(event: PointerEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
+        triggerRef.current?.focus();
       }
     }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setOpen(false);
+        triggerRef.current?.focus();
       }
     }
 
@@ -115,6 +132,14 @@ export function NotificationBell() {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open || status === "loading") {
+      return;
+    }
+    const first = listRef.current?.querySelector<HTMLElement>("button, a");
+    (first ?? panelRef.current)?.focus();
+  }, [open, status]);
+
   const unread = unreadCount(items);
   const badgeLabel = unread > 99 ? "99+" : String(unread);
 
@@ -123,6 +148,8 @@ export function NotificationBell() {
     setOpen(next);
     if (next) {
       await refresh();
+    } else {
+      triggerRef.current?.focus();
     }
   }
 
@@ -162,6 +189,7 @@ export function NotificationBell() {
   return (
     <div ref={rootRef} className="relative">
       <IconButton
+        ref={triggerRef}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={panelId}
@@ -170,7 +198,7 @@ export function NotificationBell() {
             ? `Notifications, ${unread} non lues`
             : "Notifications"
         }
-        onClick={togglePanel}
+        onClick={() => void togglePanel()}
         className="relative"
       >
         <Bell className="size-5" strokeWidth={1.75} aria-hidden="true" />
@@ -182,25 +210,32 @@ export function NotificationBell() {
       </IconButton>
       {open ? (
         <div
+          ref={panelRef}
           id={panelId}
           role="dialog"
           aria-label="Notifications"
-          className="absolute right-0 z-40 mt-2 w-[min(100vw-1.5rem,22rem)] rounded-card border border-zinc-200/80 bg-white shadow-card-hover"
+          tabIndex={-1}
+          className={cn(
+            "z-overlay flex flex-col overflow-hidden rounded-card border border-zinc-200/80 bg-white shadow-card-hover",
+            "fixed inset-x-3 top-16 max-h-[70dvh]",
+            "sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(100vw-1.5rem,22rem)]",
+          )}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2">
             <p className="font-display text-sm font-bold">Notifications</p>
             {unread > 0 ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 disabled={pending}
-                onClick={onMarkAllRead}
-                className="text-xs font-medium text-accent disabled:opacity-60"
+                onClick={() => void onMarkAllRead()}
               >
                 Tout marquer comme lu
-              </button>
+              </Button>
             ) : null}
           </div>
           <NotificationPanelBody
+            listRef={listRef}
             status={status}
             error={error}
             items={items}
@@ -214,12 +249,14 @@ export function NotificationBell() {
 }
 
 function NotificationPanelBody({
+  listRef,
   status,
   error,
   items,
   pending,
   onSelect,
 }: {
+  listRef: RefObject<HTMLUListElement | null>;
   status: "loading" | "ready" | "error";
   error: string | null;
   items: NotificationItem[];
@@ -228,15 +265,23 @@ function NotificationPanelBody({
 }) {
   if (status === "loading") {
     return (
-      <p className="px-3 py-6 text-sm text-zinc-500">
-        Chargement des notifications…
-      </p>
+      <div className="flex flex-col gap-0 p-1">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="flex min-h-11 items-start gap-3 px-3 py-3">
+            <Skeleton className="mt-0.5 size-4 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="mt-2 h-3 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
     );
   }
 
   if (status === "error" && items.length === 0) {
     return (
-      <p className="px-3 py-6 text-sm text-danger" role="alert">
+      <p className={`m-3 ${bannerErrorClass}`} role="alert">
         {error ?? "Impossible de charger les notifications."}
       </p>
     );
@@ -244,58 +289,32 @@ function NotificationPanelBody({
 
   if (items.length === 0) {
     return (
-      <div className="px-3 py-8 text-center">
-        <p className="text-sm font-medium">Aucune notification pour le moment</p>
-        <p className="mt-1 text-xs text-zinc-500">
-          Les alertes de commandes, conversations et stock apparaîtront ici.
-        </p>
-      </div>
+      <EmptyState
+        className="m-3 py-8"
+        icon={<Bell className="size-5" aria-hidden="true" />}
+        title="Aucune notification pour le moment"
+        description="Les alertes de commandes, conversations et stock apparaîtront ici."
+      />
     );
   }
 
   return (
-    <div>
+    <div className="min-h-0 flex-1 overflow-y-auto">
       {error && status === "error" ? (
-        <p className="px-3 py-2 text-xs text-danger" role="alert">
+        <p className={`mx-3 mt-2 ${bannerErrorClass}`} role="alert">
           {error}
         </p>
       ) : null}
-      <ul className="max-h-[min(24rem,70dvh)] overflow-y-auto p-1">
-        {items.map((item) => {
-          const unreadItem = item.read_at == null;
-          const secondary = notificationSecondary(item);
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onSelect(item)}
-                className={`flex w-full items-start gap-2 rounded-control px-3 py-2.5 text-left text-sm transition-shadow disabled:opacity-60 ${
-                  unreadItem
-                    ? "bg-warning-soft font-medium text-zinc-900"
-                    : "font-normal text-zinc-600 hover:shadow-card"
-                }`}
-              >
-                {unreadItem ? (
-                  <span
-                    aria-hidden="true"
-                    className="mt-1.5 size-2 shrink-0 rounded-full bg-warning"
-                  />
-                ) : (
-                  <span aria-hidden="true" className="mt-1.5 size-2 shrink-0" />
-                )}
-                <span className="min-w-0">
-                  <span className="block">{notificationSentence(item)}</span>
-                  {secondary ? (
-                    <span className="mt-0.5 block text-xs font-normal text-zinc-500">
-                      {secondary}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-            </li>
-          );
-        })}
+      <ul ref={listRef} className={NOTIFICATION_LIST_CLASS}>
+        {items.map((item) => (
+          <li key={item.id}>
+            <NotificationRow
+              item={item}
+              disabled={pending}
+              onClick={() => onSelect(item)}
+            />
+          </li>
+        ))}
       </ul>
     </div>
   );

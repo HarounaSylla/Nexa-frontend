@@ -61,7 +61,7 @@ export function CategoriesPanel({
 
   if (loading) {
     return (
-      <Card className="mt-6 overflow-hidden p-0">
+      <Card flush className="mt-6 overflow-hidden">
         {Array.from({ length: 4 }, (_, index) => (
           <div
             key={index}
@@ -111,7 +111,7 @@ export function CategoriesPanel({
           description="Attribuez une catégorie en ajoutant un produit."
         />
       ) : (
-        <Card className="mt-4 overflow-hidden p-0">
+        <Card flush className="mt-4 overflow-hidden">
           <ul className="divide-y divide-zinc-100">
             {categories.map((row) => (
               <CategoryRow

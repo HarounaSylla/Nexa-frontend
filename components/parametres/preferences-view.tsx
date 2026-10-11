@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useState } from "react";
 
 import { PageTabs } from "@/components/page-tabs";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { errorMessage } from "@/lib/api";
 import { PARAMETRES_TABS } from "@/lib/nav";
@@ -13,10 +14,7 @@ import {
   getPreferences,
   type MerchantPreferences,
 } from "@/lib/preferences-api";
-import {
-  bannerErrorClass,
-  btnSecondary,
-} from "@/lib/ui";
+import { bannerErrorClass } from "@/lib/ui";
 
 import { DeliveryZonesCard } from "./delivery-zones-card";
 import { PaymentLinksCard } from "./payment-links-card";
@@ -70,7 +68,7 @@ export function PreferencesView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full">
       <PageHeader title="Paramètres" />
       <PageTabs
         label="Sections des paramètres"
@@ -83,18 +81,19 @@ export function PreferencesView({
           <p className="font-medium">Impossible de charger vos préférences.</p>
           {error ? <p className="mt-1">{error}</p> : null}
           <p className="mt-1">Vos réglages n&apos;ont pas été modifiés.</p>
-          <button
+          <Button
             type="button"
+            variant="secondary"
             disabled={loading}
-            onClick={retry}
-            className={`${btnSecondary} mt-3`}
+            onClick={() => void retry()}
+            className="mt-3"
           >
             {loading ? "Chargement…" : "Réessayer"}
-          </button>
+          </Button>
         </div>
       ) : null}
       {tab === "preferences" && !loadFailed ? (
-        <div className="mt-6 flex flex-col gap-4">
+        <div className="mt-6 flex max-w-2xl flex-col gap-4">
           <DeliveryZonesCard
             getToken={getToken}
             zones={zones}

@@ -86,6 +86,22 @@ function formatTotal(value: unknown): string {
   return amount.toLocaleString("fr-FR");
 }
 
+export function notificationKind(
+  type: string,
+): "order" | "conversation" | "stock" {
+  if (type === "product_out_of_stock") {
+    return "stock";
+  }
+  if (
+    type === "conversation_escalated" ||
+    type === "escalated_customer_message" ||
+    type === "product_photo_unrecognized"
+  ) {
+    return "conversation";
+  }
+  return "order";
+}
+
 export function unreadCount(items: NotificationItem[]): number {
   return items.filter((item) => item.read_at == null).length;
 }

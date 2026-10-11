@@ -1,13 +1,21 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
-import { cardClass } from "@/lib/ui";
+
+const cardSurface =
+  "rounded-card border border-zinc-200/80 bg-white shadow-card";
 
 export function Card({
   className,
+  flush = false,
   ...props
-}: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn(cardClass, "p-4 sm:p-5", className)} {...props} />;
+}: HTMLAttributes<HTMLDivElement> & { flush?: boolean }) {
+  return (
+    <div
+      className={cn(cardSurface, !flush && "p-4 sm:p-5", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardHeader({

@@ -1,33 +1,23 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import Link from "next/link";
 import { useState } from "react";
 
+import { AttentionList } from "@/components/dashboard/attention-list";
+import { NotificationsCard } from "@/components/dashboard/notifications-card";
+import { RecentOrdersCard } from "@/components/dashboard/recent-orders-card";
+import { unreadCount } from "@/components/notifications/notification-copy";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatTile } from "@/components/ui/stat-tile";
-import { StatusBadge } from "@/components/orders/badges";
-import { formatMoney } from "@/components/orders/order-helpers";
-import {
-  formatRelativeTime,
-  notificationSecondary,
-  notificationSentence,
-  unreadCount,
-} from "@/components/notifications/notification-copy";
 import type { CatalogueProduct } from "@/lib/catalogue-api";
 import type { ConversationListItem } from "@/lib/conversations-api";
 import {
   markAllNotificationsRead,
+  markNotificationRead,
   type NotificationItem,
 } from "@/lib/notifications-api";
 import type { OrderListItem } from "@/lib/orders-api";
-import {
-  cardClass,
-  cardInteractiveClass,
-  emptyStateClass,
-  formatDashboardDate,
-  sectionTitleClass,
-} from "@/lib/ui";
+import { formatDashboardDate } from "@/lib/ui";
 
 export function DashboardView({
   shopName,
@@ -56,6 +46,10 @@ export function DashboardView({
   const outOfStockCount = products.filter(
     (product) => product.stock_qty === 0,
   ).length;
+  const proofCount = orders.filter(
+    (order) =>
+      order.status !== "cancelled" && order.payment_status === "proof_received",
+  ).length;
 
   const recentOrders = orders.slice(0, 4);
   const recentNotifications = notifications.slice(0, 3);
@@ -74,8 +68,19 @@ export function DashboardView({
     }
   }
 
+  async function onMarkRead(item: NotificationItem) {
+    try {
+      const updated = await markNotificationRead(await getToken(), item.id);
+      setNotifications((current) =>
+        current.map((row) => (row.id === updated.id ? updated : row)),
+      );
+    } catch {
+      // Navigation still proceeds from the link; the bell surfaces API errors.
+    }
+  }
+
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <PageHeader
         title={`Bon retour, ${shopName}`}
         subtitle={`Voici ce qui compte aujourd'hui, ${formatDashboardDate()}.`}
@@ -84,6 +89,7 @@ export function DashboardView({
       <ul className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <li>
           <StatTile
+            href="/commandes"
             label="Commandes à traiter"
             value={createdCount}
             context={"Statut « Créée », en attente d'un livreur"}
@@ -92,6 +98,7 @@ export function DashboardView({
         </li>
         <li>
           <StatTile
+            href="/commandes"
             label="Livraisons en cours"
             value={inProgressCount}
             context="Livreur assigné, pas encore confirmées"
@@ -100,6 +107,7 @@ export function DashboardView({
         </li>
         <li>
           <StatTile
+            href="/conversations"
             label="Conversations escaladées"
             value={escalatedCount}
             context={"En attente d'une réponse de votre part"}
@@ -108,6 +116,7 @@ export function DashboardView({
         </li>
         <li>
           <StatTile
+            href="/catalogue"
             label="Produits en rupture"
             value={outOfStockCount}
             context={`Sur ${products.length} produits au catalogue`}
@@ -116,98 +125,21 @@ export function DashboardView({
         </li>
       </ul>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className={`${cardClass} p-5`}>
-          <div className="flex items-center justify-between gap-3">
-            <h2 className={sectionTitleClass}>Commandes récentes</h2>
-            <Link
-              href="/commandes"
-              className="text-sm font-medium text-accent hover:underline"
-            >
-              Voir tout →
-            </Link>
-          </div>
-          {recentOrders.length === 0 ? (
-            <div className={`mt-4 ${emptyStateClass}`}>
-              <p className="font-medium text-zinc-800">Aucune commande pour le moment</p>
-              <p className="mt-1 text-sm">
-                Les commandes WhatsApp apparaîtront ici.
-              </p>
-            </div>
-          ) : (
-            <ul className="mt-4 flex flex-col gap-2">
-              {recentOrders.map((order) => (
-                <li key={order.id}>
-                  <Link
-                    href="/commandes"
-                    className={`${cardInteractiveClass} flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between`}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium">{order.customer_phone}</p>
-                      <p className="text-sm text-zinc-500 tabular-nums">
-                        {order.city ?? "Pas de ville"} · {order.item_count} article
-                        {order.item_count === 1 ? "" : "s"} · {formatMoney(order.total)}
-                      </p>
-                    </div>
-                    <StatusBadge status={order.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      <AttentionList
+        proofCount={proofCount}
+        escalatedCount={escalatedCount}
+        outOfStockCount={outOfStockCount}
+      />
 
-        <section className={`${cardClass} p-5`}>
-          <div className="flex items-center justify-between gap-3">
-            <h2 className={sectionTitleClass}>Notifications</h2>
-            {unread > 0 ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={onMarkAllRead}
-                className="text-sm font-medium text-accent hover:underline disabled:opacity-60"
-              >
-                Tout marquer comme lu
-              </button>
-            ) : null}
-          </div>
-          {recentNotifications.length === 0 ? (
-            <div className={`mt-4 ${emptyStateClass}`}>
-              <p className="font-medium text-zinc-800">
-                Aucune notification pour le moment
-              </p>
-              <p className="mt-1 text-sm">
-                Les alertes de commandes, conversations et stock apparaîtront ici.
-              </p>
-            </div>
-          ) : (
-            <ul className="mt-4 flex flex-col gap-2">
-              {recentNotifications.map((item) => {
-                const unreadItem = item.read_at == null;
-                return (
-                  <li
-                    key={item.id}
-                    className={`${cardClass} px-3 py-3 text-sm ${
-                      unreadItem ? "bg-warning-soft" : ""
-                    }`}
-                  >
-                    <p className={unreadItem ? "font-medium text-zinc-900" : "text-zinc-600"}>
-                      {notificationSentence(item)}
-                    </p>
-                    {notificationSecondary(item) ? (
-                      <p className="mt-0.5 text-xs font-normal text-zinc-500">
-                        {notificationSecondary(item)}
-                      </p>
-                    ) : null}
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {formatRelativeTime(item.created_at)}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+      <div className="mt-6 grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <RecentOrdersCard orders={recentOrders} />
+        <NotificationsCard
+          items={recentNotifications}
+          unread={unread}
+          pending={pending}
+          onMarkAllRead={() => void onMarkAllRead()}
+          onMarkRead={(item) => void onMarkRead(item)}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
+import Link from "next/link";
+
 import { cn } from "@/lib/cn";
-import { cardClass } from "@/lib/ui";
+import { focusRingClass } from "@/lib/ui";
 
 export type StatTone = "neutral" | "info" | "success" | "danger" | "warning";
 
@@ -11,21 +13,26 @@ const DOT: Record<StatTone, string> = {
   warning: "bg-warning",
 };
 
+const tileClass =
+  "block min-h-11 rounded-card border border-zinc-200/80 bg-white p-4 shadow-card";
+
 export function StatTile({
   label,
   value,
   context,
   tone = "neutral",
+  href,
   className,
 }: {
   label: string;
   value: string | number;
   context?: string;
   tone?: StatTone;
+  href?: string;
   className?: string;
 }) {
-  return (
-    <div className={cn(cardClass, "p-4", className)}>
+  const content = (
+    <>
       <p className="flex items-start gap-2 text-sm font-medium text-zinc-500">
         <span
           aria-hidden="true"
@@ -37,6 +44,24 @@ export function StatTile({
         {value}
       </p>
       {context ? <p className="mt-1 text-caption text-zinc-500">{context}</p> : null}
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cn(
+          tileClass,
+          "hover:shadow-card-hover motion-safe:transition-shadow motion-safe:duration-150",
+          focusRingClass,
+          className,
+        )}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={cn(tileClass, className)}>{content}</div>;
 }
