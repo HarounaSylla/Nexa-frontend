@@ -25,7 +25,7 @@ export const SCENE_NODES: Record<
   hub: { x: 50, y: 45 },
 };
 
-export const STAGE_HEIGHT_UNITS = 82;
+export const STAGE_HEIGHT_UNITS = 90;
 
 export function nodeTopPercent(y: number) {
   return (y / STAGE_HEIGHT_UNITS) * 100;

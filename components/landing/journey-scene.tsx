@@ -237,15 +237,15 @@ export function JourneyScene() {
 
       <div
         aria-hidden="true"
-        className="relative mx-auto mt-3 mb-8 w-full max-w-[460px] overflow-visible rounded-2xl min-[480px]:mb-6"
+        className="relative mx-auto mt-3 mb-3 w-full max-w-[460px] overflow-visible rounded-2xl"
         style={{
-          aspectRatio: "100 / 82",
+          aspectRatio: "100 / 90",
           background:
             "radial-gradient(55% 60% at 50% 55%, #fff 0%, var(--color-accent-soft) 100%)",
         }}
       >
         <svg
-          viewBox="0 0 100 82"
+          viewBox="0 0 100 90"
           preserveAspectRatio="none"
           overflow="visible"
           className="absolute inset-0 size-full"
@@ -534,7 +534,7 @@ function NodeCaption({
           : "absolute top-full left-1/2 mt-1.5 -translate-x-1/2 text-center",
       )}
     >
-      <p className="text-[12.5px] font-semibold whitespace-pre-line text-zinc-900">
+      <p className="text-[12.5px] font-semibold whitespace-pre text-zinc-900">
         {title}
       </p>
       {pill ? (
